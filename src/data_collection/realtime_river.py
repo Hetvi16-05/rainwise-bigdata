@@ -5,11 +5,26 @@ import os
 from geopy.distance import geodesic
 
 
-CITIES_FILE = "data/config/gujarat_cities.csv"
+# ✅ project root
+BASE_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..")
+)
 
-RIVER_DB = "river_database.csv"
 
-OUTPUT_FILE = "data/raw/realtime/river/realtime_river_level_log.csv"
+CITIES_FILE = os.path.join(
+    BASE_DIR,
+    "data/config/gujarat_cities.csv"
+)
+
+RIVER_DB = os.path.join(
+    BASE_DIR,
+    "river_database.csv"
+)
+
+OUTPUT_FILE = os.path.join(
+    BASE_DIR,
+    "data/raw/realtime/river/realtime_river_level_log.csv"
+)
 
 
 def find_nearest_river(lat, lon):
@@ -93,14 +108,16 @@ def main():
             "status": status
         })
 
-
     df = pd.DataFrame(rows)
 
-    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+    os.makedirs(
+        os.path.dirname(OUTPUT_FILE),
+        exist_ok=True
+    )
 
     df.to_csv(OUTPUT_FILE, index=False)
 
-    print("✅ River updated for all cities")
+    print("River updated")
     print("Rows:", len(df))
 
 

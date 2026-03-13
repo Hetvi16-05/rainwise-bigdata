@@ -3,9 +3,11 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 
-CITIES_FILE = "data/config/gujarat_cities.csv"
+from src.data_collection.run_realtime_pipeline import BASE_DIR
 
-OUTPUT_FILE = "data/raw/realtime/weather/realtime_weather_log.csv"
+CITIES_FILE = os.path.join(BASE_DIR, "data/config/gujarat_cities.csv")
+
+OUTPUT_FILE = os.path.join(BASE_DIR, "data/raw/realtime/weather/realtime_weather_log.csv")
 
 
 def fetch_weather(lat, lon):
