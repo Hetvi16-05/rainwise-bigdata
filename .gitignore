@@ -1,0 +1,65 @@
+# =========================
+# DATA (BIG FILES)
+# =========================
+data/
+cache/
+models/
+plots/
+logs/
+
+*.csv
+*.tif
+*.tiff
+*.hgt
+*.parquet
+*.pbf
+*.geojson
+*.shp
+*.dbf
+*.prj
+*.shx
+*.xlsx
+
+# =========================
+# RAINFALL / CHIRPS / DEM
+# =========================
+chirps*
+srtm*
+dem*
+rainfall*
+elevation*
+lulc*
+hydrology*
+
+# =========================
+# PYTHON CACHE
+# =========================
+__pycache__/
+*.pyc
+*.pyo
+
+# =========================
+# MAC
+# =========================
+.DS_Store
+
+# =========================
+# ENV / CONDA
+# =========================
+.env
+venv/
+.envrc
+*.env
+
+# =========================
+# SPARK / HADOOP TEMP
+# =========================
+spark-warehouse/
+metastore_db/
+*.crc
+*.log
+
+# =========================
+# NOTEBOOK CHECKPOINTS
+# =========================
+.ipynb_checkpoints/

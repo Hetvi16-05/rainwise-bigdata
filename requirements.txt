@@ -1,0 +1,23 @@
+# RAINWISE - Static Data Collection Dependencies
+# Install: pip install -r requirements_ingestion.txt
+
+# Core geospatial
+osmnx>=1.9.0
+geopandas>=0.14.0
+shapely>=2.0.0
+fiona>=1.9.0
+pyproj>=3.6.0
+
+# Raster / DEM processing
+rasterio>=1.3.0
+numpy>=1.24.0
+
+# Data handling
+pandas>=2.0.0
+requests>=2.31.0
+
+# Progress bars
+tqdm>=4.66.0
+
+# Optional: faster I/O
+pyarrow>=14.0.0      # for .parquet output in preprocessing
