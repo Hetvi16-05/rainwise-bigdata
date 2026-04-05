@@ -1,0 +1,51 @@
+# ======================
+# DATA (very important)
+# ======================
+data/
+bigdata/
+
+# ======================
+# LARGE FILES
+# ======================
+*.csv
+*.parquet
+*.zip
+*.tif
+*.tiff
+*.nc
+*.gz
+models/
+*.h5
+
+# ======================
+
+# CACHE / TEMP
+# ======================
+cache/
+__pycache__/
+*.pyc
+
+# ======================
+# LOGS / TEMP FILES
+# ======================
+*.log
+*.txt
+wget-log*
+
+# ======================
+# PLOTS / OUTPUTS
+# ======================
+plots/
+
+# ======================
+# ENV FILES
+# ======================
+.env
+.venv
+
+# ======================
+# MAC FILES
+# ======================
+.DS_Store
+.tmp.driveupload/
+src/pipeline.lock
