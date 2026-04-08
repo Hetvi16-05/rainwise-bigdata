@@ -20,7 +20,7 @@ def fetch_weather(lat, lon):
         f"https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}"
         f"&longitude={lon}"
-        f"&current=temperature_2m,precipitation,relative_humidity_2m,wind_speed_10m"
+        f"&current=temperature_2m,precipitation,relative_humidity_2m,wind_speed_10m,surface_pressure,cloud_cover"
     )
     return requests.get(url, timeout=10).json()
 
@@ -56,7 +56,9 @@ def main():
                 "temperature_C": current.get("temperature_2m"),
                 "precipitation_mm": current.get("precipitation"),
                 "humidity_percent": current.get("relative_humidity_2m"),
-                "wind_speed_kmh": current.get("wind_speed_10m")
+                "wind_speed_kmh": current.get("wind_speed_10m"),
+                "surface_pressure": current.get("surface_pressure"),
+                "cloud_cover_percent": current.get("cloud_cover")
             })
 
         except Exception as e:
@@ -71,9 +73,7 @@ def main():
     df = pd.concat([old_df, new_df], ignore_index=True)
 
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-
-    cutoff = datetime.now() - timedelta(days=7)
-    df = df[df["timestamp"] >= cutoff]
+    df = df.dropna(subset=["timestamp"])
 
     safe_write_csv(df, OUTPUT_FILE)
 

@@ -2,12 +2,18 @@ import streamlit as st
 import joblib
 import pandas as pd
 import numpy as np
+import json
 from datetime import datetime
 
-from src.utils.features import feature_engineering
 from src.utils.realtime_data import get_all_realtime, get_pipeline_status
 
-st.set_page_config(page_title="RAINWISE - Flood & Rainfall Prediction", layout="centered")
+st.set_page_config(page_title="RAINWISE — Flood & Rainfall Prediction", layout="centered")
+
+# ----------------------
+# SESSION STATE
+# ----------------------
+if "alert_history" not in st.session_state:
+    st.session_state.alert_history = []
 
 # ----------------------
 # SIDEBAR
@@ -25,18 +31,12 @@ st.sidebar.divider()
 # Pipeline status in sidebar
 pipeline_status = get_pipeline_status()
 st.sidebar.subheader("📡 Pipeline Status")
-if pipeline_status["weather_log_exists"]:
-    st.sidebar.success("Weather ✅")
-else:
-    st.sidebar.error("Weather ❌")
-if pipeline_status["rainfall_log_exists"]:
-    st.sidebar.success("Rainfall ✅")
-else:
-    st.sidebar.error("Rainfall ❌")
-if pipeline_status["river_log_exists"]:
-    st.sidebar.success("River ✅")
-else:
-    st.sidebar.error("River ❌")
+st.sidebar.markdown(
+    f"Weather: {'✅' if pipeline_status['weather_log_exists'] else '❌'} | "
+    f"Satellite: {'✅' if pipeline_status.get('satellite_log_exists') else '❌'} | "
+    f"Rainfall: {'✅' if pipeline_status['rainfall_log_exists'] else '❌'} | "
+    f"River: {'✅' if pipeline_status['river_log_exists'] else '❌'}"
+)
 
 if pipeline_status["last_run"]:
     st.sidebar.caption(f"Last run: {pipeline_status['last_run']}")
@@ -44,26 +44,44 @@ if pipeline_status["last_run"]:
 st.sidebar.divider()
 st.sidebar.markdown("""
 ```
-☁️ Atmosphere / Pipeline
-    ↓
-🌧 Rainfall Model
-    ↓
-🌊 Flood Model
-    ↓
+📡 Data Collection Pipeline
+├── realtime_weather.py   → Weather logs
+├── gpm_fetcher.py        → 🛰️ Satellite rainfall
+├── realtime_rainfall.py  → Rainfall logs
+└── realtime_river.py     → River level logs
+     ↓
+🌧 Rainfall Model (XGBoost)
+     ↓
+🌊 Flood Model (XGBoost)
+     ↓
 🚨 Alert System
 ```
 """)
 
 # ----------------------
-# SHARED DATA
+# SHARED DATA (cached)
 # ----------------------
-cities_df = pd.read_csv("data/config/gujarat_cities.csv")
-cities_df.columns = cities_df.columns.str.lower()
+@st.cache_resource
+def load_models():
+    return joblib.load("models/flood_model.pkl"), joblib.load("models/rainfall_model.pkl")
 
-river_df = pd.read_csv("data/processed/gujarat_river_distance.csv")
-elev_df = pd.read_csv("data/processed/gujarat_elevation.csv")
-river_df.columns = river_df.columns.str.lower()
-elev_df.columns = elev_df.columns.str.lower()
+@st.cache_data
+def load_city_data():
+    df = pd.read_csv("data/config/gujarat_cities.csv")
+    df.columns = df.columns.str.lower()
+    return df
+
+@st.cache_data
+def load_gis_data():
+    r = pd.read_csv("data/processed/gujarat_river_distance.csv")
+    e = pd.read_csv("data/processed/gujarat_elevation.csv")
+    r.columns = r.columns.str.lower()
+    e.columns = e.columns.str.lower()
+    return r, e
+
+flood_model, rainfall_model = load_models()
+cities_df = load_city_data()
+river_df, elev_df = load_gis_data()
 
 def find_nearest(df, lat, lon):
     df = df.copy()
@@ -77,8 +95,6 @@ def find_nearest(df, lat, lon):
 if page == "🌧 Rainfall Prediction":
     st.title("🌧 Rainfall Prediction")
     st.markdown("Predict rainfall from **atmospheric conditions** or **real-time pipeline data**.")
-
-    rainfall_model = joblib.load("models/rainfall_model.pkl")
 
     city = st.selectbox("📍 Select City", cities_df["city"].unique(), key="rain_city")
     row = cities_df[cities_df["city"] == city]
@@ -125,18 +141,29 @@ if page == "🌧 Rainfall Prediction":
         cloud_cover = st.slider("☁️ Cloud Cover (%)", 0.0, 100.0, 30.0, step=1.0, key="rain_cloud")
         data_source = "Manual"
 
+    # --- Satellite Data ---
+    if realtime.get("has_satellite") and realtime["satellite"]:
+        sat = realtime["satellite"]
+        st.divider()
+        st.subheader("🛰️ Satellite Rainfall (ERA5)")
+        sat_c1, sat_c2, sat_c3 = st.columns(3)
+        sat_c1.metric("24h Total", f"{sat['rainfall_mm']:.1f} mm")
+        sat_c2.metric("Max Hourly", f"{sat['hourly_max_mm']:.1f} mm")
+        sat_c3.metric("Hours w/ Rain", f"{sat['hours_with_rain']}h")
+        st.caption(f"📡 Satellite data from {sat['timestamp']}")
+
     # --- River Info ---
     if realtime["has_river"]:
         rv = realtime["river"]
         st.divider()
         col_rv1, col_rv2, col_rv3 = st.columns(3)
-        col_rv1.metric(f"🏞 {rv['river']} River", f"{rv['level']:.1f} m")
-        col_rv2.metric("⚠️ Danger Level", f"{rv['danger']} m")
+        col_rv1.metric(f"🏞 {rv['river']} River", f"{rv['level']:.1f} m³/s")
+        col_rv2.metric("⚠️ Danger Discharge", f"{rv['danger']} m³/s")
         col_rv3.metric("Status", rv["status"])
 
     if st.button("🔍 Predict Rainfall", key="rain_btn"):
         atmos = np.array([[temperature, humidity, pressure, wind_speed, cloud_cover]])
-        predicted_rain = max(0.0, float(rainfall_model.predict(atmos)[0]))
+        predicted_rain = float(max(0.0, float(rainfall_model.predict(atmos)[0])))
 
         st.divider()
         st.subheader("📊 Predicted Rainfall")
@@ -164,13 +191,28 @@ if page == "🌧 Rainfall Prediction":
                       f"{wind_speed} km/h", f"{cloud_cover}%", f"{predicted_rain:.2f} mm", data_source]
         })
         st.table(summary_df)
-        st.download_button("📥 Download", summary_df.to_csv(index=False),
-                           f"rainfall_{city}.csv", "text/csv")
+
+        col_dl1, col_dl2 = st.columns(2)
+        col_dl1.download_button("📥 Report (CSV)", summary_df.to_csv(index=False),
+                               f"rainfall_{city}.csv", "text/csv")
+
+        alert_data = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "city": city, "lat": float(lat), "lon": float(lon),
+            "predicted_rainfall_mm": float(round(predicted_rain, 2)),
+            "source": data_source
+        }
+        col_dl2.download_button("📥 Alert (JSON)", json.dumps(alert_data, indent=2),
+                               f"rainfall_alert_{city}.json", "application/json")
 
     st.divider()
     st.subheader("📊 Model Evaluation")
-    st.image("outputs/rainfall_actual_vs_predicted.png", caption="Actual vs Predicted (R²=0.917)")
-    st.image("outputs/rainfall_feature_importance.png", caption="Feature Importance")
+
+    tab1, tab2 = st.tabs(["📈 Actual vs Predicted", "📊 Feature Importance"])
+    with tab1:
+        st.image("outputs/rainfall_actual_vs_predicted.png", caption="Actual vs Predicted (R²=0.917)")
+    with tab2:
+        st.image("outputs/rainfall_feature_importance.png", caption="Feature Importance")
 
     st.subheader("🗺 Map")
     st.map(pd.DataFrame({"lat": [lat], "lon": [lon]}))
@@ -182,8 +224,6 @@ if page == "🌧 Rainfall Prediction":
 elif page == "🌊 Flood Prediction":
     st.title("🌊 Flood Prediction")
     st.markdown("Predict flood risk from **rainfall & geography** or **real-time pipeline data**.")
-
-    flood_model = joblib.load("models/flood_model.pkl")
 
     city = st.selectbox("📍 Select City", cities_df["city"].unique(), key="flood_city")
     row = cities_df[cities_df["city"] == city]
@@ -219,25 +259,36 @@ elif page == "🌊 Flood Prediction":
         rain = st.slider("Rainfall (mm)", 0.0, 100.0, 10.0, step=0.5, key="flood_rain")
         data_source = "Manual"
 
+    # --- Satellite Data ---
+    if realtime.get("has_satellite") and realtime["satellite"]:
+        sat = realtime["satellite"]
+        st.divider()
+        st.subheader("🛰️ Satellite Rainfall (ERA5)")
+        sat_c1, sat_c2, sat_c3 = st.columns(3)
+        sat_c1.metric("24h Total", f"{sat['rainfall_mm']:.1f} mm")
+        sat_c2.metric("Max Hourly", f"{sat['hourly_max_mm']:.1f} mm")
+        sat_c3.metric("Hours w/ Rain", f"{sat['hours_with_rain']}h")
+        st.caption(f"📡 Satellite data from {sat['timestamp']}")
+
     # --- River Info ---
     if realtime["has_river"]:
         rv = realtime["river"]
         st.divider()
         col_rv1, col_rv2, col_rv3 = st.columns(3)
-        col_rv1.metric(f"🏞 {rv['river']} River", f"{rv['level']:.1f} m")
-        col_rv2.metric("⚠️ Danger Level", f"{rv['danger']} m")
+        col_rv1.metric(f"🏞 {rv['river']} River", f"{rv['level']:.1f} m³/s")
+        col_rv2.metric("⚠️ Danger Discharge", f"{rv['danger']} m³/s")
         col_rv3.metric("Status", rv["status"])
 
         if rv["status"] == "Above Danger":
-            st.error(f"🚨 {rv['river']} River is ABOVE DANGER level!")
+            st.error(f"🚨 {rv['river']} River is ABOVE DANGER level! ({rv['level']:.1f} m³/s / {rv['danger']} m³/s)")
         elif rv["status"] == "Warning":
-            st.warning(f"⚠️ {rv['river']} River at WARNING level!")
+            st.warning(f"⚠️ {rv['river']} River at WARNING level! ({rv['level']:.1f} m³/s / {rv['warning']} m³/s)")
 
     threshold = st.slider("🎯 Alert Threshold", 0.1, 0.9, 0.5, step=0.05, key="flood_thresh")
 
     if st.button("🔍 Predict Flood Risk", key="flood_btn"):
         features = np.array([[rain, elevation, distance, lat, lon]])
-        proba = flood_model.predict_proba(features)[0][1]
+        proba = float(flood_model.predict_proba(features)[0][1])
 
         st.divider()
         st.subheader("📊 Flood Risk Assessment")
@@ -272,6 +323,19 @@ elif page == "🌊 Flood Prediction":
 """)
             st.toast(f"🚨 ALERT: {city}!", icon="🚨")
 
+        # Record to alert history
+        alert_entry = {
+            "timestamp": timestamp, "city": city,
+            "rainfall_mm": float(rain), "flood_probability": float(round(proba, 3)),
+            "alert_level": "CRITICAL" if proba > 0.8 else ("WARNING" if proba > 0.6 else ("WATCH" if proba > 0.3 else "SAFE")),
+            "source": data_source,
+            "river_status": rv["status"] if realtime["has_river"] else "N/A"
+        }
+        st.session_state.alert_history.append(alert_entry)
+
+        with st.expander("📋 Alert JSON"):
+            st.json(alert_entry)
+
         summary = pd.DataFrame({
             "Parameter": ["City", "Rainfall", "Elevation", "River Distance",
                           "Flood Probability", "Source", "River Status"],
@@ -280,13 +344,28 @@ elif page == "🌊 Flood Prediction":
                       rv["status"] if realtime["has_river"] else "N/A"]
         })
         st.table(summary)
-        st.download_button("📥 Download", summary.to_csv(index=False),
-                           f"flood_{city}.csv", "text/csv")
+
+        col_dl1, col_dl2 = st.columns(2)
+        col_dl1.download_button("📥 Report (CSV)", summary.to_csv(index=False),
+                               f"flood_{city}.csv", "text/csv")
+        col_dl2.download_button("📥 Alert (JSON)", json.dumps(alert_entry, indent=2),
+                               f"flood_alert_{city}.json", "application/json")
+
+    # Alert history
+    if len(st.session_state.alert_history) > 1:
+        st.divider()
+        st.subheader("📜 Alert History")
+        hist = pd.DataFrame(st.session_state.alert_history)
+        st.dataframe(hist, use_container_width=True)
 
     st.divider()
     st.subheader("📊 Model Evaluation")
-    st.image("outputs/flood_confusion_matrix.png", caption="Confusion Matrix")
-    st.image("outputs/flood_feature_importance.png", caption="Feature Importance")
+
+    tab1, tab2 = st.tabs(["🌊 Confusion Matrix", "📈 Feature Importance"])
+    with tab1:
+        st.image("outputs/flood_confusion_matrix.png", caption="Confusion Matrix")
+    with tab2:
+        st.image("outputs/flood_feature_importance.png", caption="Feature Importance")
 
     st.subheader("🗺 Map")
     st.map(pd.DataFrame({"lat": [lat], "lon": [lon]}))

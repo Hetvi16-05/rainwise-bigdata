@@ -1,6 +1,6 @@
 import pandas as pd
 import datetime
-import random
+import requests
 import os
 from geopy.distance import geodesic
 
@@ -39,21 +39,34 @@ def find_nearest_river(lat, lon, river_df):
     return river_df.loc[river_df["distance"].idxmin()]
 
 
-def generate_level(danger):
+def fetch_river_discharge(lat, lon):
+    """Fetch river discharge from Open-Meteo Flood API."""
+    try:
+        url = "https://flood-api.open-meteo.com/v1/flood"
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "daily": "river_discharge",
+            "forecast_days": 1,
+            "timezone": "Asia/Kolkata"
+        }
+        r = requests.get(url, params=params, timeout=10)
+        data = r.json()
+        if "daily" in data and "river_discharge" in data["daily"]:
+            return float(data["daily"]["river_discharge"][0] or 0.0)
+    except Exception as e:
+        print(f"Error fetching discharge for {lat},{lon}: {e}")
+    return 0.0
 
-    month = datetime.datetime.now().month
 
-    if month in [6, 7, 8, 9, 10]:
-        return round(random.uniform(danger - 3, danger + 3), 2)
-
-    return round(random.uniform(5, danger - 5), 2)
-
-
-def get_status(level, warning, danger):
-
-    if level >= danger:
+def get_status(discharge):
+    """
+    Get status based on discharge (m³/s).
+    Note: Using generic thresholds since the database is level-based (m).
+    """
+    if discharge > 50:
         return "Above Danger"
-    elif level >= warning:
+    elif discharge > 15:
         return "Warning"
     return "Normal"
 
@@ -69,7 +82,7 @@ def main():
 
         nearest = find_nearest_river(row["lat"], row["lon"], river_df)
 
-        level = generate_level(nearest["danger"])
+        discharge = fetch_river_discharge(row["lat"], row["lon"])
 
         rows.append({
             "timestamp": datetime.datetime.now(),
@@ -78,10 +91,10 @@ def main():
             "lon": row["lon"],
             "river": nearest["river"],
             "station": nearest["station"],
-            "level": level,
-            "danger": nearest["danger"],
-            "warning": nearest["warning"],
-            "status": get_status(level, nearest["warning"], nearest["danger"])
+            "level": discharge,  # Storing discharge in the level column for compatibility
+            "danger": 50.0,      # Discharge-based danger threshold
+            "warning": 15.0,     # Discharge-based warning threshold
+            "status": get_status(discharge)
         })
 
     new_df = pd.DataFrame(rows)

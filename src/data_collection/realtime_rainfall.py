@@ -69,13 +69,9 @@ def main():
     old_df = safe_read_csv(OUTPUT_FILE)
     df = pd.concat([old_df, new_df], ignore_index=True)
 
-    # Parse and keep only valid dates
+    # Maintain history (no cutoff for Big Data)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df = df.dropna(subset=["date"])
-
-    # Keep only last 7 days to prevent unbounded growth
-    cutoff = datetime.now() - timedelta(days=7)
-    df = df[df["date"] >= cutoff]
 
     safe_write_csv(df, OUTPUT_FILE)
 

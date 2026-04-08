@@ -189,10 +189,9 @@ def save_satellite_data(df):
         old_df = pd.read_csv(OUTPUT_FILE, on_bad_lines="skip")
         df = pd.concat([old_df, df], ignore_index=True)
 
-    # Keep only last 7 days
+    # Maintain history (no cutoff for Big Data)
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-    cutoff = datetime.now() - timedelta(days=7)
-    df = df[df["timestamp"] >= cutoff]
+    df = df.dropna(subset=["timestamp"])
 
     # Atomic write
     temp = OUTPUT_FILE + ".tmp"

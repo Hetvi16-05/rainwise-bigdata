@@ -232,18 +232,18 @@ if realtime.get("has_satellite") and realtime["satellite"]:
 if realtime["has_river"]:
     rv = realtime["river"]
     st.divider()
-    st.subheader(f"🏞️ River Level — {rv['river']} ({rv['station']})")
+    st.subheader(f"🏞️ River Discharge — {rv['river']} ({rv['station']})")
 
     col_r1, col_r2, col_r3, col_r4 = st.columns(4)
-    col_r1.metric("Current Level", f"{rv['level']:.1f} m")
-    col_r2.metric("Warning Level", f"{rv['warning']} m")
-    col_r3.metric("Danger Level", f"{rv['danger']} m")
+    col_r1.metric("Discharge", f"{rv['level']:.1f} m³/s")
+    col_r2.metric("Warning Limit", f"{rv['warning']} m³/s")
+    col_r3.metric("Danger Limit", f"{rv['danger']} m³/s")
     col_r4.metric("Status", rv["status"])
 
     if rv["status"] == "Above Danger":
-        st.error(f"🚨 {rv['river']} River is ABOVE DANGER LEVEL! ({rv['level']:.1f}m / {rv['danger']}m)")
+        st.error(f"🚨 {rv['river']} River is ABOVE DANGER LEVEL! ({rv['level']:.1f} m³/s / {rv['danger']} m³/s)")
     elif rv["status"] == "Warning":
-        st.warning(f"⚠️ {rv['river']} River at WARNING level ({rv['level']:.1f}m / {rv['warning']}m)")
+        st.warning(f"⚠️ {rv['river']} River at WARNING level ({rv['level']:.1f} m³/s / {rv['warning']} m³/s)")
 
 # ================================================================
 # AI PREDICTIONS
@@ -255,7 +255,7 @@ col_left, col_right = st.columns(2)
 with col_left:
     st.subheader("🌧 Stage 1 — Rainfall")
     atmos = np.array([[temperature, humidity, pressure, wind_speed, cloud_cover]])
-    predicted_rain = max(0.0, float(rainfall_model.predict(atmos)[0]))
+    predicted_rain = float(max(0.0, float(rainfall_model.predict(atmos)[0])))
     st.metric("Predicted Rainfall", f"{predicted_rain:.2f} mm")
 
     if actual_precipitation:
@@ -273,7 +273,7 @@ with col_left:
 with col_right:
     st.subheader("🌊 Stage 2 — Flood Risk")
     flood_features = np.array([[predicted_rain, elevation, distance, lat, lon]])
-    proba = flood_model.predict_proba(flood_features)[0][1]
+    proba = float(flood_model.predict_proba(flood_features)[0][1])
     st.metric("Flood Probability", f"{proba:.2f}")
 
     if proba > threshold:
@@ -305,12 +305,12 @@ else:
 river_context = ""
 if realtime["has_river"]:
     rv = realtime["river"]
-    river_context = f"\n🏞️ River: {rv['river']} — {rv['status']} ({rv['level']:.1f}m / {rv['danger']}m)"
+    river_context = f"\n🏞️ River: {rv['river']} — {rv['status']} ({rv['level']:.1f}m³/s / {rv['danger']}m³/s)"
 
 alert = {
-    "timestamp": timestamp, "city": city, "lat": round(lat, 4), "lon": round(lon, 4),
-    "rainfall_mm": round(predicted_rain, 2), "flood_probability": round(proba, 3),
-    "elevation_m": round(elevation), "river_distance_m": round(distance),
+    "timestamp": timestamp, "city": city, "lat": float(round(lat, 4)), "lon": float(round(lon, 4)),
+    "rainfall_mm": float(round(predicted_rain, 2)), "flood_probability": float(round(proba, 3)),
+    "elevation_m": int(round(elevation)), "river_distance_m": int(round(distance)),
     "alert_level": alert_level, "source": data_source,
     "river_status": rv["status"] if realtime["has_river"] else "N/A",
     "recipients": "District Collector, NDRF, Municipal Corp" if alert_level in ["CRITICAL", "WARNING"] else "Monitoring Team"

@@ -64,7 +64,7 @@ logger.addHandler(ch)
 # DUPLICATE CHECK (runs FIRST — before any log spam)
 # ----------------------
 def already_ran_recently():
-    """Check if pipeline ran in the last 5 minutes to prevent duplicates."""
+    """Check if pipeline ran in the last 30/60 minutes depending on season."""
     if not os.path.exists(LAST_RUN_FILE):
         return False
 
@@ -76,7 +76,18 @@ def already_ran_recently():
         return False
 
     diff = (datetime.now() - last_time).total_seconds()
-    return diff < 300  # 5 minutes
+
+    # Determine required interval based on month
+    # Peak Monsoon (July-Sept): 30 mins
+    # Rest of Year (Oct-June): 60 mins
+    month = datetime.now().month
+    if month in [7, 8, 9]:
+        required_interval = 1800  # 30 mins
+    else:
+        required_interval = 3600  # 60 mins
+
+    # Allow 60s grace period for launchd timing
+    return diff < (required_interval - 60)
 
 
 def update_last_run():

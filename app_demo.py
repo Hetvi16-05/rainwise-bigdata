@@ -2,14 +2,14 @@ import streamlit as st
 import joblib
 import pandas as pd
 import numpy as np
+import json
 from datetime import datetime
 
-from src.utils.features import feature_engineering
 from src.utils.realtime_data import get_all_realtime, get_pipeline_status
 
-st.set_page_config(page_title="Flood Prediction Demo", layout="centered")
+st.set_page_config(page_title="RAINWISE — Flood Prediction Demo", layout="centered")
 
-st.title("🌊 Flood Prediction Demo")
+st.title("🌊 RAINWISE — Flood Prediction Demo")
 st.markdown("Predict flood risk from **rainfall & geography** using XGBoost Classifier.")
 
 # ----------------------
@@ -20,6 +20,7 @@ with st.expander("🔄 How the Pipeline Works", expanded=False):
     ```
     📡 Real-Time Pipeline (run_realtime_pipeline.py)
     │  ├── realtime_weather.py  → Weather logs
+    │  ├── gpm_fetcher.py       → 🛰️ Satellite rainfall (ERA5)
     │  ├── realtime_rainfall.py → Rainfall logs
     │  └── realtime_river.py    → River level logs
     │
@@ -36,34 +37,43 @@ with st.expander("🔄 How the Pipeline Works", expanded=False):
     """)
 
 # ----------------------
-# LOAD MODEL
+# LOAD MODEL (cached)
 # ----------------------
-flood_model = joblib.load("models/flood_model.pkl")
+@st.cache_resource
+def load_model():
+    return joblib.load("models/flood_model.pkl")
 
-# ----------------------
-# CITY DATA
-# ----------------------
-cities_df = pd.read_csv("data/config/gujarat_cities.csv")
-cities_df.columns = cities_df.columns.str.lower()
+@st.cache_data
+def load_city_data():
+    df = pd.read_csv("data/config/gujarat_cities.csv")
+    df.columns = df.columns.str.lower()
+    return df
 
-city = st.selectbox("📍 Select City", cities_df["city"].unique())
+@st.cache_data
+def load_gis_data():
+    r = pd.read_csv("data/processed/gujarat_river_distance.csv")
+    e = pd.read_csv("data/processed/gujarat_elevation.csv")
+    r.columns = r.columns.str.lower()
+    e.columns = e.columns.str.lower()
+    return r, e
 
-row = cities_df[cities_df["city"] == city]
-lat = float(row["lat"].values[0])
-lon = float(row["lon"].values[0])
-
-# ----------------------
-# GIS DATA
-# ----------------------
-river_df = pd.read_csv("data/processed/gujarat_river_distance.csv")
-elev_df = pd.read_csv("data/processed/gujarat_elevation.csv")
-river_df.columns = river_df.columns.str.lower()
-elev_df.columns = elev_df.columns.str.lower()
+flood_model = load_model()
+cities_df = load_city_data()
+river_df, elev_df = load_gis_data()
 
 def find_nearest(df, lat, lon):
     df = df.copy()
     df["dist"] = (df["lat"] - lat)**2 + (df["lon"] - lon)**2
     return df.loc[df["dist"].idxmin()]
+
+# ----------------------
+# CITY SELECTION
+# ----------------------
+city = st.selectbox("📍 Select City", cities_df["city"].unique())
+
+row = cities_df[cities_df["city"] == city]
+lat = float(row["lat"].values[0])
+lon = float(row["lon"].values[0])
 
 distance = float(find_nearest(river_df, lat, lon)["river_distance"])
 elevation = float(find_nearest(elev_df, lat, lon)["elevation"])
@@ -79,6 +89,17 @@ col2.metric("Longitude", f"{lon:.4f}")
 col3, col4 = st.columns(2)
 col3.metric("Distance to River", f"{distance:.0f} m")
 col4.metric("Elevation", f"{elevation:.0f} m")
+
+# ----------------------
+# PIPELINE STATUS
+# ----------------------
+p_status = get_pipeline_status()
+st.caption(
+    f"Pipeline: Weather {'✅' if p_status['weather_log_exists'] else '❌'} | "
+    f"Satellite {'✅' if p_status.get('satellite_log_exists') else '❌'} | "
+    f"Rainfall {'✅' if p_status['rainfall_log_exists'] else '❌'} | "
+    f"River {'✅' if p_status['river_log_exists'] else '❌'}"
+)
 
 # ----------------------
 # REAL-TIME PIPELINE DATA
@@ -103,13 +124,13 @@ if realtime["pipeline_active"]:
     # River level from pipeline
     if realtime["has_river"]:
         rv = realtime["river"]
-        rt_cols[1].metric(f"🏞 {rv['river']} River", f"{rv['level']:.1f}m")
+        rt_cols[1].metric(f"🏞 {rv['river']} River", f"{rv['level']:.1f} m³/s")
         if rv["status"] == "Above Danger":
-            st.error(f"🚨 {rv['river']} River is ABOVE DANGER level! ({rv['level']:.1f}m / {rv['danger']}m)")
+            st.error(f"🚨 {rv['river']} River is ABOVE DANGER level! ({rv['level']:.1f} m³/s / {rv['danger']} m³/s)")
         elif rv["status"] == "Warning":
-            st.warning(f"⚠️ {rv['river']} River at WARNING level ({rv['level']:.1f}m / {rv['warning']}m)")
+            st.warning(f"⚠️ {rv['river']} River at WARNING level ({rv['level']:.1f} m³/s / {rv['warning']} m³/s)")
         else:
-            st.caption(f"River status: {rv['status']} (Level: {rv['level']:.1f}m, Danger: {rv['danger']}m)")
+            st.caption(f"River status: {rv['status']} (Discharge: {rv['level']:.1f} m³/s, Danger: {rv['danger']} m³/s)")
     else:
         rt_cols[1].metric("🏞 River", "No data")
 
@@ -119,6 +140,17 @@ if realtime["pipeline_active"]:
         rt_cols[2].metric("🌡 Temperature", f"{w['temperature']}°C")
     else:
         rt_cols[2].metric("🌡 Weather", "No data")
+
+    # Satellite data
+    if realtime.get("has_satellite") and realtime["satellite"]:
+        sat = realtime["satellite"]
+        st.divider()
+        st.subheader("🛰️ Satellite Rainfall (ERA5)")
+        sat_c1, sat_c2, sat_c3 = st.columns(3)
+        sat_c1.metric("24h Total", f"{sat['rainfall_mm']:.1f} mm")
+        sat_c2.metric("Max Hourly", f"{sat['hourly_max_mm']:.1f} mm")
+        sat_c3.metric("Hours w/ Rain", f"{sat['hours_with_rain']}h")
+        st.caption(f"📡 Satellite data from {sat['timestamp']}")
 
     use_pipeline = st.checkbox("📡 Use pipeline rainfall for prediction", value=rt_rain is not None and rt_rain > 0)
 else:
@@ -145,7 +177,7 @@ threshold = st.slider("🎯 Alert Threshold", 0.1, 0.9, 0.5, step=0.05)
 # ----------------------
 if st.button("🔍 Predict Flood Risk"):
     features = np.array([[rain, elevation, distance, lat, lon]])
-    proba = flood_model.predict_proba(features)[0][1]
+    proba = float(flood_model.predict_proba(features)[0][1])
 
     st.divider()
     st.subheader("📊 Flood Risk Assessment")
@@ -178,7 +210,7 @@ if st.button("🔍 Predict Flood Risk"):
     river_alert = ""
     if realtime["has_river"] and realtime["river"]["status"] != "Normal":
         rv = realtime["river"]
-        river_alert = f"\n🏞️ River: {rv['river']} at {rv['level']:.1f}m ({rv['status']})"
+        river_alert = f"\n🏞️ River: {rv['river']} at {rv['level']:.1f} m³/s ({rv['status']})"
 
     if proba > 0.6:
         alert_level = "🔴 CRITICAL" if proba > 0.8 else "🟠 WARNING"
@@ -198,8 +230,8 @@ if st.button("🔍 Predict Flood Risk"):
         sms_log = {
             "timestamp": timestamp,
             "city": city,
-            "rainfall_mm": rain,
-            "flood_probability": round(proba, 3),
+            "rainfall_mm": float(rain),
+            "flood_probability": float(round(proba, 3)),
             "alert_level": "CRITICAL" if proba > 0.8 else "WARNING",
             "data_source": data_source,
             "river_status": realtime["river"]["status"] if realtime["has_river"] else "N/A",
@@ -211,7 +243,7 @@ if st.button("🔍 Predict Flood Risk"):
     else:
         st.success(f"✅ No alert needed. {city} is safe at {timestamp}.")
 
-    # Download
+    # Download report
     summary_df = pd.DataFrame({
         "Parameter": ["City", "Rainfall", "Elevation", "River Distance", "Flood Probability",
                       "Data Source", "River Status"],
@@ -220,16 +252,33 @@ if st.button("🔍 Predict Flood Risk"):
                   realtime["river"]["status"] if realtime["has_river"] else "N/A"]
     })
     st.table(summary_df)
-    st.download_button("📥 Download Report", summary_df.to_csv(index=False),
-                       f"flood_report_{city}.csv", "text/csv")
+
+    col_dl1, col_dl2 = st.columns(2)
+    col_dl1.download_button("📥 Report (CSV)", summary_df.to_csv(index=False),
+                            f"flood_report_{city}.csv", "text/csv")
+
+    alert_json = {
+        "timestamp": timestamp, "city": city,
+        "lat": float(lat), "lon": float(lon),
+        "rainfall_mm": float(rain), "flood_probability": float(round(proba, 3)),
+        "elevation_m": int(round(elevation)), "river_distance_m": int(round(distance)),
+        "alert_level": "CRITICAL" if proba > 0.8 else ("WARNING" if proba > 0.6 else "SAFE"),
+        "source": data_source
+    }
+    col_dl2.download_button("📥 Alert (JSON)", json.dumps(alert_json, indent=2),
+                            f"alert_{city}.json", "application/json")
 
 # ----------------------
 # MODEL EVALUATION
 # ----------------------
 st.divider()
 st.subheader("📊 Flood Model Evaluation")
-st.image("outputs/flood_confusion_matrix.png", caption="Confusion Matrix")
-st.image("outputs/flood_feature_importance.png", caption="Feature Importance")
+
+tab1, tab2 = st.tabs(["🌊 Confusion Matrix", "📈 Feature Importance"])
+with tab1:
+    st.image("outputs/flood_confusion_matrix.png", caption="Confusion Matrix")
+with tab2:
+    st.image("outputs/flood_feature_importance.png", caption="Feature Importance")
 
 st.subheader("🗺 Map")
 st.map(pd.DataFrame({"lat": [lat], "lon": [lon]}))

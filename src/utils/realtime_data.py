@@ -61,11 +61,11 @@ def get_latest_weather(city=None):
     latest = df.sort_values("timestamp").iloc[-1]
 
     return {
-        "temperature": float(latest.get("temperature_C", 0) or 0),
-        "humidity": float(latest.get("humidity_percent", 0) or 0),
-        "pressure": 1012.0,  # Open-Meteo weather doesn't include pressure in this script
-        "wind_speed": float(latest.get("wind_speed_kmh", 0) or 0),
-        "cloud_cover": 50.0,  # Not collected by this script, use default
+        "temperature": float(latest.get("temperature_C", 0) or 30.0),
+        "humidity": float(latest.get("humidity_percent", 0) or 50.0),
+        "pressure": float(latest.get("surface_pressure", 0) or 1012.0),
+        "wind_speed": float(latest.get("wind_speed_kmh", 0) or 10.0),
+        "cloud_cover": float(latest.get("cloud_cover_percent", 0) or 50.0),
         "precipitation": float(latest.get("precipitation_mm", 0) or 0),
         "timestamp": str(latest["timestamp"]),
         "city": str(latest.get("city", "Unknown")),
