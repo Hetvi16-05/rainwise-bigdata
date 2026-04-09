@@ -14,7 +14,6 @@ bigdata/
 *.tiff
 *.nc
 *.gz
-models/
 *.h5
 
 # ======================

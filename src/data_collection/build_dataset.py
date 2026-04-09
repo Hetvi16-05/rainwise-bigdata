@@ -13,6 +13,7 @@ from pathlib import Path
 import os
 import logging
 import sys
+from src.bigdata.hdfs_simulator import HDFSSimulator
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +202,13 @@ def build():
 
     # --- Save ---
     safe_write_csv(df, OUT)
+
+    # ==================================================
+    # 🌉 HDFS BRIDGE (BIG DATA SIMULATION)
+    # ==================================================
+    hdfs_dest = "hdfs://raw/realtime/realtime_dataset.csv"
+    logger.info(f"🌉 Bridging real-time data to HDFS: {hdfs_dest}")
+    HDFSSimulator.put(OUT, hdfs_dest)
 
     logger.info(f"✅ Realtime dataset saved: {OUT}")
     logger.info(f"   Rows: {len(df)}, Columns: {len(df.columns)}")
