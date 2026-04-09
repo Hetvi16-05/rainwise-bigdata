@@ -196,19 +196,20 @@ def build():
     df["elevation_m"] = df.get("elevation_m", pd.Series(dtype=float)).fillna(50.0)
     df["distance_to_river_m"] = df.get("distance_to_river_m", pd.Series(dtype=float)).fillna(50000.0)
 
-    # --- Clean duplicates ---
-    if "city" in df.columns:
-        df = df.drop_duplicates(subset=["city"], keep="last")
-
-    # --- Save ---
-    safe_write_csv(df, OUT)
+    # --- Save (APPEND MODE for Big Data Velocity) ---
+    if os.path.exists(OUT):
+        df.to_csv(OUT, mode='a', header=False, index=False)
+        logger.info(f"💾 Appended {len(df)} records to {OUT}")
+    else:
+        df.to_csv(OUT, index=False)
+        logger.info(f"💾 Created {OUT} with {len(df)} records")
 
     # ==================================================
     # 🌉 HDFS BRIDGE (BIG DATA SIMULATION)
     # ==================================================
     hdfs_dest = "hdfs://raw/realtime/realtime_dataset.csv"
     logger.info(f"🌉 Bridging real-time data to HDFS: {hdfs_dest}")
-    HDFSSimulator.put(OUT, hdfs_dest)
+    HDFSSimulator.put(OUT, hdfs_dest, append=True)
 
     logger.info(f"✅ Realtime dataset saved: {OUT}")
     logger.info(f"   Rows: {len(df)}, Columns: {len(df.columns)}")
