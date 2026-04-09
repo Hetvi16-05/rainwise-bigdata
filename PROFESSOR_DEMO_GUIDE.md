@@ -93,6 +93,26 @@ Follow this script step-by-step during your presentation. It is designed to hit 
 
 ---
 
+## 🛠️ Phase 5: Technical Deep Dive (The "Alpha" Demo)
+
+If the professor asks about the "How" behind the geospatial features, use this section.
+
+### 1. Raster Processing (TIF to CSV)
+*   **What to say:** "We use the `rasterio` library to sample high-resolution topographical data. We map every GPS coordinate to a pixel index in our **Digital Elevation Model (DEM)** TIFF file to extract slope and elevation in meters."
+*   **Reference:** [TECHNICAL_ARCHITECTURE.md (Raster Section)](file:///Users/HetviSheth/rainwise/TECHNICAL_ARCHITECTURE.md#geospatial-feature-engineering)
+
+### 2. Precise River Distance (EPSG:3857)
+*   **What to say:** "Calculating distance in degrees (Lat/Lon) is inaccurate. We project our data to **EPSG:3857 (Web Mercator)** using GeoPandas, which converts coordinates into meters, allowing us to compute precise Euclidean distance to the nearest river segment."
+
+### 3. Data Lineage (The Hadoop Path)
+*   **What to say:** "Our data follows a clean lineage:
+    *   **Raw:** Immutable API landings.
+    *   **Interim:** Schema-standardized scripts.
+    *   **GIS:** Spatial intersections.
+    *   **Processed:** Final ML-ready parity."
+
+---
+
 ## 🎤 Expected VIVA "Power Answers" (Cheat Sheet)
 
 > **Q: Why PySpark and not just Scikit-Learn?**
