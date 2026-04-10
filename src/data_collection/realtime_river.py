@@ -63,9 +63,11 @@ def get_river_name_from_osm(lat, lon, city):
         query = f"""
         [out:json][timeout:15];
         (
-          way(around:5000, {lat}, {lon})[waterway~"river|stream|canal"];
+          way(around:20000, {lat}, {lon})["waterway"="river"];
+          relation(around:20000, {lat}, {lon})["waterway"="river"];
+          way(around:5000, {lat}, {lon})[waterway~"stream|canal"];
         );
-        out tags;
+        out tags center;
         """
         
         for server in overpass_servers:
@@ -98,7 +100,7 @@ def get_river_name_from_osm(lat, lon, city):
     except Exception as e:
         print(f"OSM Total Error for {city}: {e}")
         
-    return "Nearby River"
+    return f"{city} Area River"
 
 def find_nearest_river(lat, lon, river_df, city):
     """
@@ -168,30 +170,30 @@ def main():
 
         discharge = fetch_river_discharge(row["lat"], row["lon"])
 
-        rows.append({
-            "timestamp": datetime.datetime.now(),
+        entry = {
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "city": row["city"],
             "lat": row["lat"],
             "lon": row["lon"],
-            "river": nearest["river"],
-            "station": nearest["station"],
-            "level": discharge,  # Storing discharge in the level column for compatibility
-            "danger": 50.0,      # Discharge-based danger threshold
-            "warning": 15.0,     # Discharge-based warning threshold
+            "river": nearest.get("river", f"{row['city']} Area Waterway"),
+            "station": nearest.get("station", "Auto-Calculated"),
+            "level": discharge,
+            "danger": 50.0,
+            "warning": 15.0,
             "status": get_status(discharge)
-        })
+        }
+        
+        # Immediate Update: Save per city so dashboard updates in real-time
+        new_row_df = pd.DataFrame([entry])
+        current_log = safe_read_csv(OUTPUT_FILE)
+        
+        # Keep things lean: only keep last 5000 entries total
+        updated_log = pd.concat([current_log, new_row_df], ignore_index=True).tail(5000)
+        safe_write_csv(updated_log, OUTPUT_FILE)
+        
+        print(f"✅ Updated {row['city']}: {entry['river']} ({discharge} m3/s)")
 
-    new_df = pd.DataFrame(rows)
-
-    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-
-    old_df = safe_read_csv(OUTPUT_FILE)
-
-    df = pd.concat([old_df, new_df], ignore_index=True)
-
-    safe_write_csv(df, OUTPUT_FILE)
-
-    print("✅ River updated:", len(new_df))
+    print("🏁 Full River Update Cycle Complete")
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ def safe_read(path):
     """Read CSV safely, return empty DataFrame if missing or corrupt."""
     if os.path.exists(path):
         try:
-            return pd.read_csv(path, on_bad_lines="skip")
+            return pd.read_csv(path, on_bad_lines="skip", low_memory=False)
         except Exception:
             return pd.DataFrame()
     return pd.DataFrame()
