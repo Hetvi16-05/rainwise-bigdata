@@ -174,7 +174,7 @@ if realtime["pipeline_active"] and realtime["has_weather"]:
     actual_precipitation = w.get("precipitation", 0)
     weather_time = w["timestamp"]
     data_source = "Pipeline"
-    st.success(f"✅ Using **Real-Time Pipeline** data (collected at {weather_time})")
+    st.success(f"✅ Using **Real-Time Pipeline** data (Source: CWC/GPM | Collected: {weather_time})")
 else:
     # Fallback: try API
     api_data, api_error = fetch_weather_api(lat, lon)
@@ -187,7 +187,7 @@ else:
         actual_precipitation = api_data["precipitation"]
         weather_time = api_data["time"]
         data_source = "Open-Meteo API"
-        st.info(f"📡 Using **Open-Meteo API** (pipeline data not available)")
+        st.info(f"📡 Using **Open-Meteo Global API** (Reporting Time: {weather_time})")
     else:
         # Final fallback: manual
         st.warning("⚠️ No pipeline or API data. Using manual input.")
