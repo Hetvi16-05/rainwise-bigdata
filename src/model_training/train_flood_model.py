@@ -180,7 +180,7 @@ importances = model.named_steps["classifier"].feature_importances_
 
 feature_names = [
     "rain3", "rain7", "rain_intensity", "rain_ratio",
-    "river_risk", "elevation", "distance", "lat", "lon"
+    "river_risk", "drainage_factor", "elevation", "distance", "lat", "lon"
 ]
 
 indices = np.argsort(importances)[::-1]
