@@ -49,6 +49,33 @@ RAINWISE is designed as a **Distributed System** using HDFS and PySpark, and the
 
 ---
 
+## 🏆 5. Why XGBoost Over Other ML Models?
+
+While several Machine Learning models were considered, XGBoost was selected for its superior ability to handle the specific complexities of meteorological data.
+
+### XGBoost vs. Decision Trees (Single Learner)
+- **The Issue:** A single Decision Tree is prone to **overfitting**; it tends to "memorize" the training data rather than learning generalized patterns.
+- **The Solution:** XGBoost is an **Ensemble** of many trees. It uses Gradient Boosting to sequentially build trees, where each new tree specifically focuses on correcting the errors of the previous ones. This results in far higher predictive power.
+
+### XGBoost vs. Random Forest (Bagging vs. Boosting)
+- **The Issue:** Random Forest builds many trees in parallel (Bagging) and averages their results. While stable, it can still be limited by the noise in weather datasets.
+- **The Solution:** XGBoost uses **Boosting**, which is an additive strategy. Furthermore, XGBoost includes built-in **L1 (Lasso) and L2 (Ridge) Regularization**. This mathematically penalizes model complexity, ensuring that RAINWISE doesn't overreact to sensor glitches or seasonal anomalies.
+
+### XGBoost vs. Naive Bayes (Independence Assumption)
+- **The Issue:** Naive Bayes is built on the assumption that all features are **independent**. In reality, weather features are highly dependent (e.g., Temperature affects Pressure, which affects Rainfall).
+- **The Solution:** XGBoost is designed to capture **Feature Interactions**. It can identify that a specific combination of high Humidity AND low Pressure is a much stronger indicator of rain than either feature alone.
+
+### Summary Comparison Table
+
+| Model | Strategy | Feature Interaction | Overfitting Control | Performance |
+| :--- | :--- | :--- | :--- | :--- |
+| **XGBoost** | **Boosting (Sequential)** | **Excellent** | **High (L1/L2 Regularization)** | **State-of-the-Art** |
+| Random Forest | Bagging (Parallel) | Good | Moderate | High |
+| Decision Tree | Single Learner | Moderate | Very Low (High Overfit) | Moderate |
+| Naive Bayes | Probabilistic | Poor (Assumes Independence) | Moderate | Low (for Weather) |
+
+---
+
 ## 🏁 Final Conclusion
 
 For the **RAINWISE** flood intelligence system, **XGBoost** represents the most scientifically sound choice. It provides the highest predictive accuracy for our specific feature set while maintaining the **transparency** and **computational efficiency** required for high-stakes environmental monitoring. By leveraging the strengths of advanced Machine Learning, RAINWISE remains a robust, scalable solution for real-world disaster management.

@@ -78,3 +78,15 @@ This document provides the formal answers for the 10-step Big Data project requi
     *   **Heatmaps:** Showed correlation between elevation and river proximity.
     *   **Box Plots:** Explicitly identified rainfall outliers beyond the 3rd quartile.
 *   **Implementation:** Exported Spark summaries to Matplotlib/Seaborn for high-fidelity visualization in the [plots/](file:///Users/HetviSheth/rainwise/plots/) directory.
+
+---
+
+### 🌐 The 5 V's of Big Data in RAINWISE
+
+The project successfully addresses the core characteristics of Big Data through its specialized flood prediction and weather monitoring pipeline.
+
+1.  **Volume:** We manage and process large-scale datasets, including historical rainfall archives from **CHIRPS** and **NASA POWER** spanning over two decades of meteorological records across hundreds of coordinates in Gujarat.
+2.  **Velocity:** The system handles data at high speeds, particularly in our **Real-Time Integration** layer which ingests live river level sensors (CWC) and hourly weather telemetry for immediate risk assessment and alerting.
+3.  **Variety:** Our architecture harmonizes multi-modal data sources, including **Structured** (Meteorological CSVs), **Semi-Structured** (REST API JSON responses), and **Geospatial** (TIF Rasters for Elevation and Shapefiles for River Networks).
+4.  **Veracity:** We ensure data reliability and truthfulness by performing rigorous quality audits. This includes filtering satellite noise, identifying missing sensor timestamps, and statistically isolating outliers to maintain a high "source of truth."
+5.  **Value:** The ultimate utility of the project is converting raw environmental telemetry into high-fidelity **Flood Risk Probabilities**. This provides actionable intelligence that enables district collectors and disaster response teams to take proactive measures.
