@@ -10,7 +10,7 @@ from src.utils.realtime_data import get_all_realtime, get_pipeline_status
 st.set_page_config(page_title="RAINWISE — Flood Prediction Demo", layout="centered")
 
 st.title("🌊 RAINWISE — Flood Prediction Demo")
-st.markdown("Predict flood risk from **rainfall & geography** using XGBoost Classifier.")
+st.markdown("Predict flood risk from **rainfall & geography** using **Logistic Regression (Balanced)**.")
 
 # ----------------------
 # PIPELINE VISUALIZATION
@@ -30,8 +30,8 @@ with st.expander("🔄 How the Pipeline Works", expanded=False):
          ↓
     🗺️ GIS Lookup (Elevation, River Distance)
          ↓
-    🤖 Flood Model (XGBoost Classifier)
-         ↓
+    🤖 Flood Model (Logistic Regression)
+    │
     📊 Risk Assessment + 🚨 Alert
     ```
     """)
@@ -153,7 +153,15 @@ if realtime["pipeline_active"]:
         sat_c3.metric("Hours w/ Rain", f"{sat['hours_with_rain']}h")
         st.caption(f"📡 Satellite data from {sat['timestamp']}")
 
-    use_pipeline = st.checkbox("📡 Use pipeline rainfall for prediction", value=rt_rain is not None and rt_rain > 0)
+    # Unified Rainfall Logic (Satellite + API)
+    obs_rain = 0.0
+    if realtime.get("has_satellite") and realtime["satellite"]:
+        obs_rain = max(obs_rain, float(realtime["satellite"]["rainfall_mm"]))
+    if realtime.get("has_rainfall"):
+        obs_rain = max(obs_rain, float(realtime["rainfall"]["precipitation_mm"]))
+    
+    rt_rain = obs_rain if (realtime.get("has_satellite") or realtime.get("has_rainfall")) else None
+    use_pipeline = st.checkbox("📡 Use pipeline observation for prediction", value=rt_rain is not None)
 else:
     st.info("ℹ️ No pipeline data found. Run `python src/data_collection/run_realtime_pipeline.py` to collect data.")
     use_pipeline = False
@@ -277,9 +285,9 @@ st.subheader("📊 Flood Model Evaluation")
 
 tab1, tab2 = st.tabs(["🌊 Confusion Matrix", "📈 Feature Importance"])
 with tab1:
-    st.image("outputs/flood_confusion_matrix.png", caption="Confusion Matrix")
+    st.image("outputs/flood_logistic_confusion_matrix.png", caption="Logistic Regression Confusion Matrix")
 with tab2:
-    st.image("outputs/flood_feature_importance.png", caption="Feature Importance")
+    st.image("outputs/flood_logistic_feature_importance.png", caption="Safety-Prioritized Feature Importance")
 
 st.subheader("🗺 Map")
 st.map(pd.DataFrame({"lat": [lat], "lon": [lon]}))
@@ -307,7 +315,7 @@ with stress_col2:
     st.markdown("##### 🏙️ Urban Impact")
     msg = "No major urban clogging detected." if drainage_cap > 70 else "Significant surface runoff in streets due to poor drainage."
     st.info(f"**Insight:** {msg}")
-    st.caption("This analysis uses the 'Drainage Factor' feature engineered for the XGBoost model.")
+    st.caption("This analysis uses the 'Drainage Factor' feature engineered for the Logistic Regression model.")
 
 st.info("""
 **🔍 Explainable AI (XAI) Tip:** Notice how changing the **Drainage Slider** affects the probability 

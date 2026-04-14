@@ -176,7 +176,7 @@ st.divider()
 # SIDEBAR
 # ================================================================
 st.sidebar.title("🌊 RAINWISE")
-view_mode = st.sidebar.radio("Navigation", ["🌐 Live Dashboard", "📅 Advanced Analysis"], index=0)
+view_mode = st.sidebar.radio("Navigation", ["🌐 Live Dashboard", "📅 Advanced Analysis", "🔮 Seasonal Simulation"], index=0)
 
 st.sidebar.divider()
 st.sidebar.subheader("⚙️ Settings")
@@ -327,9 +327,28 @@ if view_mode == "🌐 Live Dashboard":
 
     with col_right:
         st.subheader("🌊 Stage 2 — Flood Risk")
-        flood_features = np.array([[predicted_rain, elevation, distance, lat, lon]])
+        
+        # Hybrid Input Logic: Prioritize Observation over AI Forecast
+        obs_rain = 0.0
+        if realtime.get("has_satellite") and realtime["satellite"]:
+            obs_rain = max(obs_rain, float(realtime["satellite"]["rainfall_mm"]))
+        if actual_precipitation:
+            obs_rain = max(obs_rain, float(actual_precipitation))
+            
+        # Decision: Use Observation if available, otherwise fallback to AI Prediction
+        if (realtime.get("has_satellite") and realtime["satellite"]) or actual_precipitation:
+            used_rain = obs_rain
+            rain_source = "📡 Observation (Satellite/API)"
+        else:
+            used_rain = predicted_rain
+            rain_source = "🧠 AI Forecast (Atmospheric)"
+            
+        flood_features = np.array([[used_rain, elevation, distance, lat, lon]])
         proba = float(flood_model.predict_proba(flood_features)[0][1])
+        
         st.metric("Flood Probability", f"{proba:.2f}")
+        st.caption(f"**Data Source:** {rain_source} — **Rain Input:** {used_rain:.1f}mm")
+        
         if proba > threshold:
             if proba > 0.8:
                 st.error("🚨 **CRITICAL** — Evacuate now!")
@@ -439,8 +458,8 @@ if view_mode == "🌐 Live Dashboard":
     tab1, tab2 = st.tabs(["🌊 Flood Model", "🌧 Rainfall Model"])
     with tab1:
         c1, c2 = st.columns(2)
-        c1.image("outputs/flood_confusion_matrix.png", caption="Confusion Matrix")
-        c2.image("outputs/flood_feature_importance.png", caption="Feature Importance")
+        c1.image("outputs/flood_logistic_confusion_matrix.png", caption="Logistic Regression Confusion Matrix")
+        c2.image("outputs/flood_logistic_feature_importance.png", caption="Safety-Prioritized Feature Importance")
     with tab2:
         c3, c4 = st.columns(2)
         c3.image("outputs/rainfall_actual_vs_predicted.png", caption="R²=0.917")
@@ -495,6 +514,52 @@ if view_mode == "🌐 Live Dashboard":
     st.divider()
     st.subheader("🗺 Model Location Map")
     st.map(pd.DataFrame({"lat": [lat], "lon": [lon]}))
+
+# ================================================================
+# VIEW: SEASONAL SIMULATION
+# ================================================================
+elif view_mode == "🔮 Seasonal Simulation":
+    st.header(f"🔮 Seasonal Climate Simulation — {city}")
+    st.markdown("Assess flood risk by simulating weather patterns for a specific month and date range.")
+
+    c1, c2, c3 = st.columns(3)
+    month_name = c1.selectbox("Select target Month", 
+                             ["January", "February", "March", "April", "May", "June", 
+                              "July", "August", "September", "October", "November", "December"],
+                             index=datetime.now().month - 1)
+    
+    # Convert name to number
+    month_num = ["January", "February", "March", "April", "May", "June", 
+                 "July", "August", "September", "October", "November", "December"].index(month_name) + 1
+    
+    sim_start = c2.date_input("Simulation Start", datetime(2026, month_num, 1))
+    sim_end = c3.date_input("Simulation End", datetime(2026, month_num, 28 if month_num == 2 else 30))
+
+    if st.button("🚀 Run Seasonal AI Simulation"):
+        with st.spinner(f"Simulating {month_name} atmospheric conditions..."):
+            sim_df = predict_future_range(lat, lon, elevation, distance, sim_start, sim_end)
+        
+        if not sim_df.empty:
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Simulated Total Rain", f"{sim_df['rain_mm'].sum():.1f} mm")
+            m2.metric("High-Risk Flood Days", len(sim_df[sim_df['flood_probability'] > threshold]))
+            m3.metric("Max Predicted Risk", f"{sim_df['flood_probability'].max():.1%}")
+            
+            st.divider()
+            st.markdown(f"#### 🧠 {month_name} AI Risk Forecast")
+            st.line_chart(sim_df.set_index('readable_date')[['rain_mm', 'flood_probability']])
+            
+            with st.expander("📋 Detailed Simulation Data"):
+                st.write(sim_df)
+        else:
+            st.error("Invalid date range selected.")
+
+    st.divider()
+    st.info(f"""
+    **💡 About Seasonal Simulation:** This mode uses **Climatology Profiles** for Gujarat to predict 
+    how the **Logistic Regression** model would react to typical weather during the selected month 
+    at **{city}**'s specific elevation ({elevation:.0f}m) and river proximity ({distance:.0f}m).
+    """)
 
 # ================================================================
 # VIEW: ADVANCED ANALYSIS

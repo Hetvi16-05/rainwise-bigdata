@@ -52,7 +52,7 @@ st.sidebar.markdown("""
      ↓
 🌧 Rainfall Model (XGBoost)
      ↓
-🌊 Flood Model (XGBoost)
+🌊 Flood Model (Logistic Regression)
      ↓
 🚨 Alert System
 ```
@@ -268,14 +268,26 @@ elif page == "🌊 Flood Prediction":
                           ["✏️ Manual Input", "📡 Pipeline Data"],
                           horizontal=True, key="flood_source")
 
-    if input_mode == "📡 Pipeline Data" and realtime["has_rainfall"]:
-        rt_rain = realtime["rainfall"]["precipitation_mm"]
-        rain = st.slider("Rainfall (mm)", 0.0, 100.0, min(float(rt_rain), 100.0), step=0.5, key="flood_rain")
-        st.caption(f"📡 Pipeline value: {rt_rain} mm")
-        data_source = "Pipeline"
+    if input_mode == "📡 Pipeline Data":
+        # Unify Satellite and API Observation
+        obs_rain = 0.0
+        has_obs = False
+        if realtime.get("has_satellite") and realtime["satellite"]:
+            obs_rain = max(obs_rain, float(realtime["satellite"]["rainfall_mm"]))
+            has_obs = True
+        if realtime.get("has_rainfall"):
+            obs_rain = max(obs_rain, float(realtime["rainfall"]["precipitation_mm"]))
+            has_obs = True
+            
+        if has_obs:
+            rain = st.slider("Rainfall (mm)", 0.0, 100.0, min(float(obs_rain), 100.0), step=0.5, key="flood_rain")
+            st.success(f"📡 Using Pipeline Observation: {obs_rain:.1f} mm")
+            data_source = "Pipeline"
+        else:
+            st.warning("⚠️ No pipeline rainfall data found. Using manual input.")
+            rain = st.slider("Rainfall (mm)", 0.0, 100.0, 10.0, step=0.5, key="flood_rain")
+            data_source = "Manual"
     else:
-        if input_mode == "📡 Pipeline Data":
-            st.warning("⚠️ No pipeline rainfall data. Using manual input.")
         rain = st.slider("Rainfall (mm)", 0.0, 100.0, 10.0, step=0.5, key="flood_rain")
         data_source = "Manual"
 
@@ -383,9 +395,9 @@ elif page == "🌊 Flood Prediction":
 
     tab1, tab2 = st.tabs(["🌊 Confusion Matrix", "📈 Feature Importance"])
     with tab1:
-        st.image("outputs/flood_confusion_matrix.png", caption="Confusion Matrix")
+        st.image("outputs/flood_logistic_confusion_matrix.png", caption="Logistic Regression (High Recall) Matrix")
     with tab2:
-        st.image("outputs/flood_feature_importance.png", caption="Feature Importance")
+        st.image("outputs/flood_logistic_feature_importance.png", caption="Logistic Coefficients")
 
     st.subheader("🗺 Map")
     st.map(pd.DataFrame({"lat": [lat], "lon": [lon]}))
