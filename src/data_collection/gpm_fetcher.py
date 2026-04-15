@@ -71,7 +71,7 @@ def get_satellite_rainfall(lat, lon, hours=24):
         }
         Returns None if all retries fail.
     """
-    now = datetime.utcnow()
+    now = datetime.now()
     start = now - timedelta(hours=hours)
 
     # --- Try Archive API first (satellite-calibrated historical data) ---

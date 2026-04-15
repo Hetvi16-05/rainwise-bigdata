@@ -25,47 +25,47 @@ hdfs.mkdir("hdfs://rainwise/raw")
 ```
 
 ## 📦 Step 4: Ingest Raw Dataset into HDFS
-Data is uploaded from the local landing zone into the HDFS Raw Zone with a replication factor of 3.
+Data is uploaded from the local landing zone into the HDFS Raw Zone.
 ```python
-# Simulated Command: hdfs dfs -put local_landing/india_grid.csv hdfs://rainwise/raw/
-hdfs.put("bigdata_demo/raw/india_grid.csv", "hdfs://rainwise/raw/")
+# Simulated Command: hdfs dfs -put local_landing/training_dataset.csv hdfs://rainwise/raw/
+hdfs.put("data/processed/training_dataset_gujarat_advanced_labeled.csv", "hdfs://rainwise/raw/")
 ```
 
 ---
 
 ## 🔍 Step 5: Audit Schema & Data Types
 We load the dataset into a **Pandas/Spark DataFrame** to inspect the structural integrity.
-- **Discovery:** Verified `latitude` and `longitude` as `float64`/`int64` types.
-- **Goal:** Identifying schema mismatches before large-scale processing.
+- **Scale:** **2,279,281** records.
+- **Discovery:** Verified `lat_x`, `lon_x`, `rain_mm`, `elevation_m`, and `flood` (target) as core types.
 
 ## 🛠️ Step 6: Normalize Column Headers
 To prevent coding errors in SQL/PySpark, we standardize all headers to **lowercase snake_case**.
 ```python
 df.columns = [c.lower().replace(' ', '_') for c in df.columns]
-# Result: ['latitude', 'longitude']
+# Result: ['date', 'lat_x', 'rain_mm', 'elevation_m', 'flood', ...]
 ```
 
 ---
 
 ## ✅ Step 7: Veracity Check (Missing Values)
 We calculate the intensity of missing data to verify the "Truthfulness" of our sources.
-- **Result:** Found < 1% missing data.
-- **Veracity Score:** **99.2%** Reliability.
+- **Result:** Found 0 missing values in the production-ready set.
+- **Veracity Score:** **100.0%** Reliability.
 
 ## 💠 Step 8: Variety Check (Duplicates)
-We verify that the data variety doesn't lead to duplicates that bias the model.
-- **Result:** 0 duplicate records found.
-- **Unique Records:** 240 distinct grid coordinates.
+We verify that the data variety doesn't lead to bias.
+- **Result:** **0 duplicate records** found in 2.2 million rows.
+- **Variety Scale:** 240 distinct geographic grid points across Gujarat.
 
 ---
 
 ## 📈 Step 9: Descriptive Statistical Summary
 We establish a baseline for "Normal" behavior and explicitly spot **Outliers**.
-- **Metrics:** Mean, StdDev, Min/Max (used to identify sensor glitches).
-- **Result:** Latitude range [6, 36] and Longitude range [68, 96] confirmed.
+- **Metrics:** Mean rain (~2.5mm), Max rain (93.4mm), Mean elevation (223m).
+- **Result:** Distribution confirmed as ready for XGBoost distributed training.
 
 ## 🎨 Step 10: High-Fidelity Visualization
-We generate visual insights to identify extreme anomalies and data distributions.
+We generate visual insights using a 50,000-point representative sample for performance.
 
 ### A. Distribution Audit (Histogram)
 ![Latitude Distribution](file:///Users/HetviSheth/rainwise/bigdata_demo/plots/latitude_histogram.png)

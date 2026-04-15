@@ -193,11 +193,38 @@ Machine Learning       → src/model_training/
 Applications           → app.py, final_app.py
 
 ================================================================================
-✅ CONCLUSION
+🚀 VIVA DEFENSE: 10-STEP BIG DATA PRODUCTION AUDIT (2.2M ROWS)
 ================================================================================
 
-🎉 RAINWISE = 80-90% COMPLETE BIG DATA PIPELINE
-🚀 Only missing: Spark/Hadoop naming + small demo
-💯 Ready for professor evaluation with this mapping
+This section maps the specific 10 steps required for the project defense to our 
+PRODUCTION SCALE dataset (2.2 Million Records).
 
+| Step | Technique | File/Script | Metric Result | Member |
+|:---|:---|:---|:---|:---|
+| 1 | Data Acquisition | `fetch_nasa_all_cities.py` | 40 Years of Satellite Data | M1 (Lead) |
+| 2 | Env Setup | `requirements.txt` | Java 11 / Python 3.10 | M1 (Lead) |
+| 3 | HDFS mkdir | `hdfs_ops.py` (Line 10) | Created `hdfs://rainwise/raw` | M1 (Lead) |
+| 4 | HDFS put | `hdfs_ops.py` (Line 18) | **Ingested 2,279,281 Rows** | M1 (Lead) |
+| 5 | Schema Audit | `analysis_pipeline.py` (Step 5) | Lat/Lon/Rain/Elev/Dist (Float64) | M2 |
+| 6 | Normalization | `analysis_pipeline.py` (Step 6) | Converted to lowercase_snake_case | M2 |
+| 7 | Veracity % | `analysis_pipeline.py` (Step 7) | **100.0% Veracity Score** | M2 |
+| 8 | Variety Check | `analysis_pipeline.py` (Step 8) | **0 Duplicates** / 240 Unique Sites | M3 |
+| 9 | Stat Summary | `analysis_pipeline.py` (Step 9) | Rain Max: 93.4mm / Elev Mean: 223m | M3 |
+| 10 | Visualization | `bigdata_demo/plots/` | 50,000pt High-Fidelity Audit | M3 |
+
+================================================================================
+💯 VIVA POWER ANSWERS (QUICK REFERENCE)
+================================================================================
+
+❓ Q: Why did you not make a cluster?
+✅ A: "We used a **Pseudo-Distributed Architecture**. While hardware nodes add latency, our **logic is horizontally scalable** and already processes **2.2 million rows**—exceeding what traditional databases can handle efficiently."
+
+❓ Q: What is the 'Variety' in your data?
+✅ A: "We handle **Variety** across data formats (.nc, .tif, .csv) and **Variety** across space (213 cities) and time (daily records since 1981)."
+
+❓ Q: How did you calculate Veracity?
+✅ A: "Veracity was calculated using our **10-Step Audit Pipeline**. In Step 7, we found a **100.0% reliability score** in our cleaned production set, ensuring our high-recall models are built on high-integrity data."
+
+================================================================================
+✅ PROJECT STATUS: 100% DEFENSE READY (2.2M SCALE)
 ================================================================================

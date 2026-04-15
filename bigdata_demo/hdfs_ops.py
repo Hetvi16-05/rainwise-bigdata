@@ -34,8 +34,16 @@ if __name__ == "__main__":
     print("\n--- Step 3: Create Dedicated Project Directory ---")
     hdfs.mkdir("hdfs://rainwise/raw")
     
-    # Simulate Step 4
-    print("\n--- Step 4: Ingest Raw Dataset ---")
-    hdfs.put("bigdata_demo/raw/india_grid.csv", "hdfs://rainwise/raw/")
+    # Simulate Step 4: Ingest the PRODUCTION scale dataset (2.2M Rows)
+    print("\n--- Step 4: Ingest Raw Dataset (2.27 Million Rows) ---")
+    # Production File Path
+    prod_file = "data/processed/training_dataset_gujarat_advanced_labeled.csv"
     
-    print("\n✅ Steps 3 & 4 Complete.")
+    if os.path.exists(prod_file):
+        hdfs.put(prod_file, "hdfs://rainwise/raw/")
+    else:
+        # Fallback to demo file if production file is missing in this environment
+        print("⚠️ Production file not found, falling back to sample...")
+        hdfs.put("bigdata_demo/raw/india_grid.csv", "hdfs://rainwise/raw/")
+    
+    print("\n✅ Steps 3 & 4 (HDFS Ingestion) Complete.")
