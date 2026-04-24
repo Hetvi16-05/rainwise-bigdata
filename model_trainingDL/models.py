@@ -68,7 +68,7 @@ class TabTransformer(nn.Module):
     Projects each feature into an embedding space and uses Self-Attention 
      to learn inter-feature dependencies.
     """
-    def __init__(self, input_dim, embed_dim=32, depth=2, heads=4, mlp_hidden=[128, 64]):
+    def __init__(self, input_dim, embed_dim=32, depth=2, heads=4, mlp_hidden=[128, 64], dropout=0.2):
         super(TabTransformer, self).__init__()
         
         # 1. Feature Projections (Embedding continuous features)
@@ -81,7 +81,7 @@ class TabTransformer(nn.Module):
             d_model=embed_dim, 
             nhead=heads, 
             dim_feedforward=embed_dim * 4,
-            dropout=0.1,
+            dropout=dropout,
             batch_first=True
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=depth)
@@ -95,7 +95,7 @@ class TabTransformer(nn.Module):
                 nn.Linear(curr_dim, h),
                 nn.ReLU(),
                 nn.BatchNorm1d(h),
-                nn.Dropout(0.1)
+                nn.Dropout(dropout)
             ])
             curr_dim = h
             

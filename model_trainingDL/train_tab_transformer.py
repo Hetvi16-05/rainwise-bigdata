@@ -17,11 +17,13 @@ SCALER_SAVE_PATH = "DLmodels/tab_transformer_scaler.pkl"
 
 # HYPERPARAMETERS
 BATCH_SIZE = 128
-EPOCHS = 40
+EPOCHS = 100 # Increased as we have early stopping now
 LEARNING_RATE = 0.0005
 EMBED_DIM = 32
 TRANSFORMER_DEPTH = 3
 ATTENTION_HEADS = 4
+DROPOUT = 0.2
+EARLY_STOPPING_PATIENCE = 10 # Stop if no improvement for 10 epochs
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
 def train_transformer():
@@ -42,23 +44,25 @@ def train_transformer():
     print(f"   - Embedding Dim: {EMBED_DIM}")
     print(f"   - Transformer Depth: {TRANSFORMER_DEPTH}")
     print(f"   - Attention Heads: {ATTENTION_HEADS}")
-    print(f"   - Total Hidden Neurons (MLP): 128, 64")
+    print(f"   - Dropout (Regularization): {DROPOUT}")
     
     model = TabTransformer(
         input_dim=input_dim,
         embed_dim=EMBED_DIM,
         depth=TRANSFORMER_DEPTH,
-        heads=ATTENTION_HEADS
+        heads=ATTENTION_HEADS,
+        dropout=DROPOUT
     ).to(DEVICE)
     
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-5)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4) # Higher weight decay for L2 reg
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
     
     # 3. Training Loop
     print(f"🚀 Starting Training on {DEVICE}...")
     history = {"train_loss": [], "test_loss": []}
     best_loss = float('inf')
+    early_stop_counter = 0
     start_time = time.time()
     
     for epoch in range(EPOCHS):
@@ -91,28 +95,39 @@ def train_transformer():
         history["train_loss"].append(avg_train_loss)
         history["test_loss"].append(avg_test_loss)
         
+        # Scheduler Step
         scheduler.step(avg_test_loss)
         
+        # Logging
         if (epoch+1) % 5 == 0 or epoch == 0:
             print(f"Epoch [{epoch+1:02d}/{EPOCHS}] | Train MSE: {avg_train_loss:.4f} | Test MSE: {avg_test_loss:.4f} | LR: {optimizer.param_groups[0]['lr']:.6f}")
             
-        # Save Best Model
+        # 🛡️ Early Stopping & Save Best Model
         if avg_test_loss < best_loss:
+            print(f"🚩 New Best Score ({avg_test_loss:.4f})! Saving model...")
             best_loss = avg_test_loss
             torch.save(model.state_dict(), MODEL_SAVE_PATH)
             joblib.dump(scaler, SCALER_SAVE_PATH)
+            early_stop_counter = 0 # Reset counter
+        else:
+            early_stop_counter += 1
+            if (epoch+1) % 5 == 0:
+                 print(f"⏱️ No improvement for {early_stop_counter} epochs.")
+            
+        if early_stop_counter >= EARLY_STOPPING_PATIENCE:
+            print(f"🛑 [EARLY STOP] No improvement for {EARLY_STOPPING_PATIENCE} epochs. Terminating training.")
+            break
             
     total_time = time.time() - start_time
     print(f"\n✅ Training Complete in {total_time:.1f}s")
-    print(f"🏆 Best Test MSE: {best_loss:.4f}")
-    print(f"💾 Model Saved to {MODEL_SAVE_PATH}")
+    print(f"🏆 Best Test MSE Archive: {best_loss:.4f}")
     
     # 4. Visualization
     plt.figure(figsize=(10, 6))
     plt.plot(history["train_loss"], label="Train MSE", color='blue', alpha=0.7)
     plt.plot(history["test_loss"], label="Test MSE", color='orange', linewidth=2)
-    plt.yscale('log') # Log scale for better visualization of convergence
-    plt.title("TabTransformer Rainfall Regression: Training vs Test Loss")
+    plt.yscale('log')
+    plt.title("TabTransformer: Training vs Test Loss (with Regularization)")
     plt.xlabel("Epochs")
     plt.ylabel("Mean Squared Error (log scale)")
     plt.grid(True, alpha=0.3)
