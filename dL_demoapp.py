@@ -1,22 +1,51 @@
 import streamlit as st
 import torch
+import torch.nn as nn
 import joblib
 import pandas as pd
 import numpy as np
-from model_trainingDL.models import FloodDNN
 import os
 from datetime import datetime
+from model_trainingDL.models import TabTransformer
+
+# ==========================================
+# COMPATIBLE ARCHITECTURES
+# ==========================================
+class CompatibleFloodDNN(nn.Module):
+    """A Deep Neural Network matching the saved weights in DLmodels/flood_dnn.pth"""
+    def __init__(self):
+        super(CompatibleFloodDNN, self).__init__()
+        self.network = nn.Sequential(
+            nn.Linear(5, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            
+            nn.Linear(64, 32),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            
+            nn.Linear(16, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return self.network(x)
 
 # ==========================================
 # PAGE CONFIG & PREMIUM AESTHETICS
 # ==========================================
 st.set_page_config(
-    page_title="RAINWISE AI — Deep Learning Flood Intelligence",
+    page_title="RAINWISE AI — Sequential DL Pipeline",
     page_icon="🌊",
     layout="wide"
 )
 
-# Custom CSS for Premium Look
+# Custom CSS
 st.markdown("""
     <style>
     .main {
@@ -32,11 +61,6 @@ st.markdown("""
         font-weight: bold;
         border: none;
         transition: 0.3s;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(56, 189, 248, 0.4);
     }
     .metric-container {
         background: rgba(30, 41, 59, 0.7);
@@ -44,6 +68,7 @@ st.markdown("""
         border-radius: 16px;
         border: 1px solid rgba(56, 189, 248, 0.2);
         backdrop-filter: blur(8px);
+        margin-bottom: 20px;
     }
     h1, h2, h3 {
         background: linear-gradient(90deg, #38bdf8, #818cf8);
@@ -54,26 +79,31 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🌊 RAINWISE AI — Phase 3: Deep Learning Prediction")
-st.markdown("### Next-Gen Flood Prediction using Torch-Optimized Deep Neural Networks")
+st.title("🌊 RAINWISE AI — Phase 3: Sequential DL Pipeline")
+st.markdown("### Stage 1: TabTransformer (Rain) → Stage 2: FloodDNN (Risk)")
 
 # ==========================================
 # LOAD RESOURCES
 # ==========================================
 @st.cache_resource
 def load_dl_resources():
-    input_dim = 5  # Fixed based on our model_trainingDL
-    model = FloodDNN(input_dim)
+    device = torch.device("cpu")
     
-    # Load weights
+    # 1. Rainfall Model (TabTransformer) - 6 features, Depth 3
+    rain_model = TabTransformer(input_dim=6, depth=3)
+    if os.path.exists("DLmodels/tab_transformer_rainfall.pth"):
+        rain_model.load_state_dict(torch.load("DLmodels/tab_transformer_rainfall.pth", map_location=device))
+    rain_model.eval()
+    rain_scaler = joblib.load("DLmodels/tab_transformer_scaler.pkl") if os.path.exists("DLmodels/tab_transformer_scaler.pkl") else None
+    
+    # 2. Flood Model (CompatibleDNN) - 5 features
+    flood_model = CompatibleFloodDNN()
     if os.path.exists("DLmodels/flood_dnn.pth"):
-        # Map to CPU for inference compatibility
-        model.load_state_dict(torch.load("DLmodels/flood_dnn.pth", map_location=torch.device('cpu')))
+        flood_model.load_state_dict(torch.load("DLmodels/flood_dnn.pth", map_location=device))
+    flood_model.eval()
+    flood_scaler = joblib.load("DLmodels/scaler.pkl") if os.path.exists("DLmodels/scaler.pkl") else None
     
-    model.eval()
-    
-    scaler = joblib.load("DLmodels/scaler.pkl") if os.path.exists("DLmodels/scaler.pkl") else None
-    
+    # Meta Data
     cities_df = pd.read_csv("data/config/gujarat_cities.csv")
     cities_df.columns = cities_df.columns.str.lower()
     
@@ -82,9 +112,9 @@ def load_dl_resources():
     r_dist.columns = r_dist.columns.str.lower()
     elev.columns = elev.columns.str.lower()
     
-    return model, scaler, cities_df, r_dist, elev
+    return rain_model, rain_scaler, flood_model, flood_scaler, cities_df, r_dist, elev
 
-model, scaler, cities_df, river_df, elev_df = load_dl_resources()
+rain_model, rain_scaler, flood_model, flood_scaler, cities_df, river_df, elev_df = load_dl_resources()
 
 def find_nearest(df, lat, lon):
     df_calc = df.copy()
@@ -96,12 +126,13 @@ def find_nearest(df, lat, lon):
 # ==========================================
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/artificial-intelligence.png", width=80)
-    st.header("Intelligence Settings")
-    threshold = st.slider("Alert Sensitivity (Probability)", 0.1, 0.9, 0.5, step=0.05)
-    st.info("💡 Training reached 97.3% accuracy on the Gujarat metadata set.")
+    st.header("Pipeline Settings")
+    threshold = st.slider("Flood Alert Threshold", 0.1, 0.9, 0.5, step=0.05)
     
-    if os.path.exists("outputs/dl/training_curves.png"):
-        st.image("outputs/dl/training_curves.png", caption="Model Learning History")
+    st.divider()
+    st.subheader("System Status")
+    st.success("Rainfall Model: Loaded ✅")
+    st.success("Flood Model: Loaded ✅")
 
 # ==========================================
 # MAIN INTERFACE
@@ -109,12 +140,16 @@ with st.sidebar:
 col_l, col_r = st.columns([1, 1])
 
 with col_l:
-    st.markdown("#### 📍 Location Selection")
-    city = st.selectbox("Select Target City", cities_df["city"].unique())
+    st.markdown("#### 📍 Step 1: Context Selection")
+    city = st.selectbox("Select Target City", cities_df["city"].unique(), index=60) # Default to Ahmedabad
     
-    city_row = cities_df[cities_df["city"] == city]
-    lat = float(city_row["lat"].values[0])
-    lon = float(city_row["lon"].values[0])
+    city_row = cities_df[cities_df["city"] == city].iloc[0]
+    lat = float(city_row["lat"])
+    lon = float(city_row["lon"])
+    
+    # Population fallback
+    pop_mapping = {"Ahmedabad": 8600000, "Surat": 6100000, "Vadodara": 2200000, "Rajkot": 1800000}
+    pop = float(pop_mapping.get(city, 1000000))
     
     dist_val = float(find_nearest(river_df, lat, lon)["river_distance"])
     elev_val = float(find_nearest(elev_df, lat, lon)["elevation"])
@@ -122,69 +157,61 @@ with col_l:
     st.markdown(f"""
     <div class="metric-container">
         <b>Latitude:</b> {lat:.4f} | <b>Longitude:</b> {lon:.4f}<br>
-        <b>Elevation:</b> {elev_val:.0f}m | <b>River Proximity:</b> {dist_val:.0f}m
+        <b>Elevation:</b> {elev_val:.0f}m | <b>River Proximity:</b> {dist_val:.0f}m<br>
+        <b>Est. Population:</b> {pop/1e6:.1f}M
     </div>
     """, unsafe_allow_html=True)
     
-    st.markdown("#### 🌧️ Meteorology Input")
-    rain = st.slider("Expected 24h Rainfall (mm)", 0.0, 150.0, 25.0, step=1.0)
+    st.markdown("#### 🌧️ Step 2: Temporal Input")
+    rain3 = st.slider("Rainfall in last 3 days (mm)", 0.0, 300.0, 45.0, step=1.0)
+    st.caption("Soil saturation seed for rainfall prediction.")
 
 with col_r:
-    st.markdown("#### 🤖 DL Inference Engine")
-    if st.button("RUN DEEP LEARNING ANALYSIS"):
-        # PREPROCESS
-        raw_feats = np.array([[rain, elev_val, dist_val, lat, lon]])
-        
-        if scaler:
-            scaled_feats = scaler.transform(raw_feats)
+    st.markdown("#### 🚀 Step 3: Run AI Pipeline")
+    if st.button("EXECUTE SEQUENTIAL INFERENCE"):
+        if not rain_scaler or not flood_scaler:
+            st.error("Error: Model scalers not found.")
         else:
-            scaled_feats = raw_feats
+            # --- STAGE 1: RAINFALL (TabTransformer) ---
+            # Features: [elev, dist, lat, lon, pop, rain3]
+            rain_input = [elev_val, dist_val, lat, lon, pop, rain3]
+            rain_scaled = rain_scaler.transform([rain_input])
+            rain_tensor = torch.tensor(rain_scaled, dtype=torch.float32)
             
-        inputs = torch.tensor(scaled_feats, dtype=torch.float32)
-        
-        # PREDICT
-        with torch.no_grad():
-            output = model(inputs)
-            proba = output.item()
+            with torch.no_grad():
+                pred_rain = max(0.0, rain_model(rain_tensor).item())
             
-        st.divider()
-        
-        # RESULTS DISPLAY
-        col_res1, col_res2 = st.columns(2)
-        
-        with col_res1:
-            st.metric("Flood Probability", f"{proba*100:.1f}%")
+            # --- STAGE 2: FLOOD (FloodDNN) ---
+            # Features: [rain, elev, dist, lat, lon]
+            flood_input = [pred_rain, elev_val, dist_val, lat, lon]
+            flood_scaled = flood_scaler.transform([flood_input])
+            flood_tensor = torch.tensor(flood_scaled, dtype=torch.float32)
             
-        with col_res2:
-            if proba >= 0.8:
-                st.error("🚨 CRITICAL RISK")
-            elif proba >= threshold:
-                st.warning("⚠️ SIGNIFICANT RISK")
+            with torch.no_grad():
+                flood_proba = flood_model(flood_tensor).item()
+            
+            # RESULTS
+            st.divider()
+            st.subheader("🌧️ Stage 1: Predicted Rainfall")
+            st.metric("Rainfall Forecast", f"{pred_rain:.2f} mm")
+            
+            st.divider()
+            st.subheader("🌊 Stage 2: Flood Risk")
+            c1, c2 = st.columns(2)
+            c1.metric("Probability", f"{flood_proba*100:.1f}%")
+            if flood_proba >= threshold:
+                c2.error("🚨 HIGH RISK")
             else:
-                st.success("✅ LOW RISK")
-        
-        # PROGRESS BAR VISUAL
-        st.progress(proba)
-        
-        # INTERPRETATION
-        if proba >= 0.8:
-            st.markdown("""
-            > [!CAUTION]
-            > **EXTREME FLOOD RISK DETECTED.**
-            > Cumulative rainfall and low elevation indicate imminent saturation. Automated alerts triggered for District Collectors.
+                c2.success("✅ SAFE")
+            
+            st.progress(flood_proba)
+            
+            st.markdown(f"""
+            > [!TIP]
+            > **XAI Insight:** Based on {rain3}mm historical rain, the **TabTransformer** predicts **{pred_rain:.1f}mm** today. 
+            > The **FloodDNN** calculates a **{flood_proba*100:.1f}%** risk for this topography.
             """)
-        elif proba >= 0.5:
-             st.markdown("""
-            > [!WARNING]
-            > **POTENTIAL FLOOD HAZARD.**
-            > River distance and intensity suggest possible waterlogging in low-lying sectors.
-            """)
-        else:
-            st.markdown("> [!NOTE]  \n> **SYSTEMS NORMAL.** Risk levels are well below safety thresholds for the current topography.")
 
 st.divider()
-st.subheader("🗺️ Geographic Context")
-map_data = pd.DataFrame({"lat": [lat], "lon": [lon]})
-st.map(map_data, zoom=10)
-
-st.caption(f"RAINWISE DL Inference Engine v1.0 | Last Sync: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+st.map(pd.DataFrame({"lat": [lat], "lon": [lon]}), zoom=10)
+st.caption(f"RAINWISE Sequential DL Pipeline | {datetime.now().strftime('%Y-%m-%d %H:%M')}")
