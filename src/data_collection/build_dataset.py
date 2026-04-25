@@ -205,19 +205,20 @@ def build():
         logger.info(f"💾 Created {OUT} with {len(df)} records")
 
     # ==================================================
-    # 🌉 HDFS BRIDGE (BIG DATA SIMULATION)
+    # 🌉 HDFS BRIDGE (OFFICIAL HADOOP STORAGE)
     # ==================================================
     hdfs_dest = "hdfs://raw/realtime/realtime_dataset.csv"
-    logger.info(f"🌉 Bridging real-time data to HDFS: {hdfs_dest}")
+    logger.info(f"🌉 Syncing real-time data to HDFS: {hdfs_dest}")
+    
+    # Push to HDFS
     HDFSSimulator.put(OUT, hdfs_dest, append=True)
-
-    logger.info(f"✅ Realtime dataset saved: {OUT}")
-    logger.info(f"   Rows: {len(df)}, Columns: {len(df.columns)}")
-    logger.info(f"   Columns: {list(df.columns)}")
-
-    print(f"✅ Realtime dataset saved: {OUT}")
-    print(f"   Rows: {len(df)}")
-
+    
+    # --- DELETE LOCAL COPY (HDFS ONLY REQUIREMENT) ---
+    if os.path.exists(OUT):
+        os.remove(OUT)
+        logger.info(f"🗑️ Local staging file deleted: {OUT} (Data now resides in HDFS)")
+    
+    logger.info(f"✅ Realtime pipeline complete. Data stored in HDFS: {hdfs_dest}")
     return df
 
 

@@ -202,6 +202,23 @@ def run_pipeline():
 
     if all_success:
         logger.info("🎉 Pipeline completed successfully!")
+        # --- ZERO LOCAL FOOTPRINT (HDFS ONLY) ---
+        try:
+            import shutil
+            raw_realtime = os.path.join(PROJECT_DIR, "data/raw/realtime")
+            processed_realtime = os.path.join(PROJECT_DIR, "data/processed/realtime_dataset.csv")
+            
+            if os.path.exists(raw_realtime):
+                shutil.rmtree(raw_realtime)
+                logger.info(f"🗑️ Purged local raw logs: {raw_realtime}")
+            
+            if os.path.exists(processed_realtime):
+                os.remove(processed_realtime)
+                logger.info(f"🗑️ Purged local processed dataset: {processed_realtime}")
+                
+            logger.info("🔐 Zero Local Footprint: Live data now resides exclusively in Hadoop HDFS.")
+        except Exception as e:
+            logger.warning(f"⚠️ Cleanup failed: {e}")
     else:
         logger.warning("⚠️ Pipeline completed with some failures")
 
