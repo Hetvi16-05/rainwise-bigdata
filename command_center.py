@@ -169,6 +169,17 @@ with l_col:
     
     st.divider()
     
+    st.markdown("### 🛰️ Live Neural Feed (HDFS)")
+    # Fetch from HDFS
+    hdfs_df = HDFSReader.get_latest_realtime()
+    if not hdfs_df.empty:
+        st.dataframe(hdfs_df[['timestamp', 'city', 'rain_mm', 'elevation_m']].tail(5), use_container_width=True)
+        st.caption(f"Last Sync: {hdfs_df['timestamp'].iloc[-1] if 'timestamp' in hdfs_df.columns else 'Just Now'}")
+    else:
+        st.warning("Waiting for next Hadoop batch...")
+
+    st.divider()
+    
     st.markdown("### 📍 City Demographic Pulse")
     target_city = st.selectbox("Select Station", cities_df["city"].unique(), index=60)
     city_row = cities_df[cities_df["city"] == target_city].iloc[0]

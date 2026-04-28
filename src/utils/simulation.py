@@ -113,3 +113,58 @@ class SimulationPipeline:
             current_date = pd.to_datetime(current_date) + pd.Timedelta(days=1)
             
         return pd.DataFrame(results)
+
+class DeepSimulationPipeline:
+    """Orchestrates the DL-based 2-stage prediction flow (Phase 2)."""
+    
+    def __init__(self, rain_model, rain_scaler, flood_model, flood_scaler):
+        self.rain_model = rain_model
+        self.rain_scaler = rain_scaler
+        self.flood_model = flood_model
+        self.flood_scaler = flood_scaler
+        
+    def run_simulation(self, city_meta, start_date, days=30, historical_seed=None, population=1000000):
+        import torch
+        results = []
+        
+        # Seed memory (7 days)
+        if historical_seed is None or len(historical_seed) < 7:
+            rain_memory = [0.0] * 7
+        else:
+            rain_memory = historical_seed[-7:]
+            
+        current_date = start_date
+        
+        for _ in range(days):
+            rain3 = sum(rain_memory[-3:])
+            
+            # STAGE 1: Rainfall Prediction (TabTransformer)
+            # Features: [elev, dist, lat, lon, pop, rain3]
+            r_feat = [city_meta["elevation"], city_meta["river_distance"], city_meta["lat"], city_meta["lon"], float(population), rain3]
+            r_scaled = self.rain_scaler.transform([r_feat])
+            
+            with torch.no_grad():
+                pred_rain = max(0.0, self.rain_model(torch.tensor(r_scaled, dtype=torch.float32)).item())
+            
+            # STAGE 2: Flood Prediction (FloodDNN)
+            # Features: [rain, elev, dist, lat, lon]
+            f_feat = [pred_rain, city_meta["elevation"], city_meta["river_distance"], city_meta["lat"], city_meta["lon"]]
+            f_scaled = self.flood_scaler.transform([f_feat])
+            
+            with torch.no_grad():
+                flood_proba = self.flood_model(torch.tensor(f_scaled, dtype=torch.float32)).item()
+            
+            rain_memory.append(pred_rain)
+            
+            results.append({
+                "date": current_date.strftime("%Y-%m-%d"),
+                "rain_mm": round(pred_rain, 2),
+                "flood_probability": round(flood_proba, 3),
+                "rain3": round(rain3, 2),
+                "type": "Deep Learning Simulation 🧠"
+            })
+            
+            # Increment day
+            current_date = pd.to_datetime(current_date) + pd.Timedelta(days=1)
+            
+        return pd.DataFrame(results)

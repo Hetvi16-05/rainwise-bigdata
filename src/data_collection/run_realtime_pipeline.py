@@ -211,10 +211,14 @@ def run_pipeline():
             if os.path.exists(raw_realtime):
                 shutil.rmtree(raw_realtime)
                 logger.info(f"🗑️ Purged local raw logs: {raw_realtime}")
-            
-            if os.path.exists(processed_realtime):
-                os.remove(processed_realtime)
-                logger.info(f"🗑️ Purged local processed dataset: {processed_realtime}")
+                
+            # --- ADAPTIVE NEURAL LEARNING (INCREMENTAL TRAINING) ---
+            try:
+                logger.info("🧠 Triggering Adaptive Learning (Incremental Update)...")
+                subprocess.run([PYTHON, os.path.join(PROJECT_DIR, "src/model_trainingDL/incremental_train.py")], capture_output=True)
+                logger.info("✅ Models fine-tuned on new HDFS data.")
+            except Exception as e:
+                logger.warning(f"⚠️ Adaptive Learning failed: {e}")
                 
             logger.info("🔐 Zero Local Footprint: Live data now resides exclusively in Hadoop HDFS.")
         except Exception as e:

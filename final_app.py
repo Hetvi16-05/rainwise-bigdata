@@ -9,6 +9,32 @@ from datetime import datetime
 
 from src.utils.features import feature_engineering
 from src.utils.realtime_data import get_all_realtime, get_pipeline_status
+import torch
+import torch.nn as nn
+from model_trainingDL.models import TabTransformer
+
+# ==========================================
+# COMPATIBLE DL ARCHITECTURES
+# ==========================================
+class CompatibleFloodDNN(nn.Module):
+    def __init__(self):
+        super(CompatibleFloodDNN, self).__init__()
+        self.network = nn.Sequential(
+            nn.Linear(5, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(64, 32),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            nn.Linear(16, 1),
+            nn.Sigmoid()
+        )
+    def forward(self, x):
+        return self.network(x)
 
 st.set_page_config(
     page_title="RAINWISE — Real-Time Flood Intelligence",
@@ -27,11 +53,28 @@ if "alert_history" not in st.session_state:
 # ----------------------
 @st.cache_resource
 def load_models():
-    return (
+    # 1. ML Models
+    ml_models = (
         joblib.load("models/flood_model.pkl"), 
         joblib.load("models/rainfall_model.pkl"),
         joblib.load("models/advanced_simulation_model.pkl")
     )
+    
+    # 2. DL Models
+    device = torch.device("cpu")
+    rain_dl = TabTransformer(input_dim=6, depth=3)
+    if os.path.exists("DLmodels/tab_transformer_rainfall.pth"):
+        rain_dl.load_state_dict(torch.load("DLmodels/tab_transformer_rainfall.pth", map_location=device))
+    rain_dl.eval()
+    rain_dl_scaler = joblib.load("DLmodels/tab_transformer_scaler.pkl") if os.path.exists("DLmodels/tab_transformer_scaler.pkl") else None
+    
+    flood_dl = CompatibleFloodDNN()
+    if os.path.exists("DLmodels/flood_dnn.pth"):
+        flood_dl.load_state_dict(torch.load("DLmodels/flood_dnn.pth", map_location=device))
+    flood_dl.eval()
+    flood_dl_scaler = joblib.load("DLmodels/scaler.pkl") if os.path.exists("DLmodels/scaler.pkl") else None
+    
+    return ml_models, (rain_dl, rain_dl_scaler, flood_dl, flood_dl_scaler)
 
 @st.cache_data
 def load_city_data():
@@ -47,7 +90,9 @@ def load_gis_data():
     e.columns = e.columns.str.lower()
     return r, e
 
-flood_model, rainfall_model, adv_sim_model = load_models()
+ml_models, dl_bundle = load_models()
+flood_model, rainfall_model, adv_sim_model = ml_models
+rain_dl, rain_dl_scaler, flood_dl, flood_dl_scaler = dl_bundle
 cities_df = load_city_data()
 river_df, elev_df = load_gis_data()
 
@@ -62,43 +107,41 @@ def get_climatology(month):
         return {"temp": 22.0, "humid": 50.0, "pres": 1016.0, "wind": 8.0, "cloud": 5.0}
 
 @st.cache_data
-def predict_future_range(city_name, city_lat, city_lon, elevation, distance, start_dt, end_dt):
-    from src.utils.simulation import SimulationPipeline
+def predict_future_range(city_name, city_lat, city_lon, elevation, distance, start_dt, end_dt, engine="ML (Production)"):
+    from src.utils.simulation import SimulationPipeline, DeepSimulationPipeline
     
-    f_model, r_model, adv_model = load_models()
-    engine = SimulationPipeline(r_model, adv_model)
+    # Population mapping for DL
+    pop_mapping = {"Ahmedabad": 8600000, "Surat": 6100000, "Vadodara": 2200000, "Rajkot": 1800000}
+    pop = float(pop_mapping.get(city_name, 1000000))
     
     # 7-DAY COLD START SEEDING
-    # Fetch real historical data for the 7 days prior to start_dt
     seed_start = start_dt - pd.Timedelta(days=7)
     seed_end = start_dt - pd.Timedelta(days=1)
-    
     hist_seed_df = load_historical_data(city_lat, city_lon, seed_start, seed_end)
     
     if not hist_seed_df.empty:
-        # Use rain_mm from history
         historical_rain = hist_seed_df.sort_values("date")["rain_mm"].tolist()
-        # Ensure we have exactly 7 days
         if len(historical_rain) < 7:
             historical_rain = [0.0] * (7 - len(historical_rain)) + historical_rain
     else:
         historical_rain = [0.0] * 7
         
-    city_meta = {
-        "lat": city_lat,
-        "lon": city_lon,
-        "elevation": elevation,
-        "river_distance": distance
-    }
-    
-    # Run the Advanced Simulation Engine
+    city_meta = {"lat": city_lat, "lon": city_lon, "elevation": elevation, "river_distance": distance}
     days_to_sim = (end_dt - start_dt).days + 1
-    sim_df = engine.run_simulation(city_meta, start_dt, days=days_to_sim, historical_seed=historical_rain)
+
+    if engine == "DL (Experimental)":
+        ml_bundle, dl_bundle = load_models()
+        rain_dl, rain_dl_scaler, flood_dl, flood_dl_scaler = dl_bundle
+        engine_obj = DeepSimulationPipeline(rain_dl, rain_dl_scaler, flood_dl, flood_dl_scaler)
+        sim_df = engine_obj.run_simulation(city_meta, start_dt, days=days_to_sim, historical_seed=historical_rain, population=pop)
+    else:
+        ml_bundle, dl_bundle = load_models()
+        f_model, r_model, adv_model = ml_bundle
+        engine_obj = SimulationPipeline(r_model, adv_model)
+        sim_df = engine_obj.run_simulation(city_meta, start_dt, days=days_to_sim, historical_seed=historical_rain)
+        sim_df["type"] = "Advanced AI Simulation 🚀"
     
-    # Formatting for app compatibility
     sim_df["readable_date"] = pd.to_datetime(sim_df["date"])
-    sim_df["type"] = "Advanced AI Simulation 🚀"
-    
     return sim_df
 
 @st.cache_data
@@ -549,9 +592,11 @@ elif view_mode == "🔮 Seasonal Simulation":
     sim_start = c2.date_input("Simulation Start", datetime(2026, month_num, 1))
     sim_end = c3.date_input("Simulation End", datetime(2026, month_num, 28 if month_num == 2 else 30))
 
+    engine_type = st.radio("Select Prediction Engine", ["ML (Production)", "DL (Experimental)"], horizontal=True)
+
     if st.button("🚀 Run Seasonal AI Simulation"):
-        with st.spinner(f"Running Two-Stage AI Pipeline for {month_name}..."):
-            sim_df = predict_future_range(city, lat, lon, elevation, distance, sim_start, sim_end)
+        with st.spinner(f"Running Two-Stage {engine_type} Pipeline for {month_name}..."):
+            sim_df = predict_future_range(city, lat, lon, elevation, distance, sim_start, sim_end, engine=engine_type)
         
         if not sim_df.empty:
             m1, m2, m3 = st.columns(3)
@@ -571,7 +616,7 @@ elif view_mode == "🔮 Seasonal Simulation":
     st.divider()
     st.info(f"""
     **💡 About Seasonal Simulation:** This mode uses **Climatology Profiles** for Gujarat to predict 
-    how the **Logistic Regression** model would react to typical weather during the selected month 
+    how the selected model (**{engine_type}**) would react to typical weather during the selected month 
     at **{city}**'s specific elevation ({elevation:.0f}m) and river proximity ({distance:.0f}m).
     """)
 
