@@ -35,9 +35,9 @@ get_interval() {
     CURRENT_MONTH=$(date +%-m)  # 1=Jan ... 12=Dec
     # Monsoon months: June(6), July(7), August(8), September(9)
     if [ "$CURRENT_MONTH" -ge 6 ] && [ "$CURRENT_MONTH" -le 9 ]; then
-        echo 1800  # 30 minutes in seconds
+        echo 30    # 30 seconds for demo monsoon
     else
-        echo 3600  # 60 minutes in seconds
+        echo 60    # 60 seconds for demo non-monsoon
     fi
 }
 
