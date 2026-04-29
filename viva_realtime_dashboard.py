@@ -319,6 +319,64 @@ with tab4:
                     fig11.update_layout(xaxis_title="Current Population", yaxis_title="Projected 2026 Population", plot_bgcolor="#0E1117", paper_bgcolor="#0E1117", margin={"r":0,"t":0,"l":0,"b":0})
                     st.plotly_chart(fig11, use_container_width=True)
                     
+            st.markdown("---")
+            c3, c4 = st.columns(2)
+            
+            # Query 3: Geospatial Distribution
+            with c3:
+                st.markdown("#### 3. Spatial Population Density 🗺️")
+                st.code('db.city_summaries.find({}, {"_id": 0, "city": 1, "latitude": 1, "longitude": 1, "population": 1})', language='javascript')
+                cursor_geo = col_cities.find({}, {"_id": 0, "city": 1, "latitude": 1, "longitude": 1, "population": 1})
+                df_geo = pd.DataFrame(list(cursor_geo))
+                if not df_geo.empty:
+                    fig12 = px.scatter_mapbox(df_geo, lat="latitude", lon="longitude", size="population", hover_name="city",
+                                              color_discrete_sequence=["#FF007F"], zoom=5, mapbox_style="carto-darkmatter")
+                    fig12.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, paper_bgcolor="#0E1117")
+                    st.plotly_chart(fig12, use_container_width=True)
+
+            # Query 4: Absolute Growth Delta
+            with c4:
+                st.markdown("#### 4. Highest Absolute Growth Delta 📈")
+                st.code('db.city_summaries.aggregate([\n  {"$project": {"city": 1, "growth": {"$subtract": ["$projected_pop_2026", "$population"]}}},\n  {"$sort": {"growth": -1}},\n  {"$limit": 10}\n])', language='javascript')
+                pipeline = [
+                    {"$project": {"_id": 0, "city": 1, "growth": {"$subtract": ["$projected_pop_2026", "$population"]}}},
+                    {"$sort": {"growth": -1}},
+                    {"$limit": 10}
+                ]
+                cursor_growth = col_cities.aggregate(pipeline)
+                df_growth = pd.DataFrame(list(cursor_growth))
+                if not df_growth.empty:
+                    fig13 = px.bar(df_growth, x='growth', y='city', orientation='h', color='growth', color_continuous_scale="Oranges")
+                    fig13.update_layout(yaxis={'categoryorder':'total ascending'}, xaxis_title="New Residents by 2026", plot_bgcolor="#0E1117", paper_bgcolor="#0E1117", margin={"r":0,"t":0,"l":0,"b":0})
+                    st.plotly_chart(fig13, use_container_width=True)
+
+            st.markdown("---")
+            c5, c6 = st.columns(2)
+            
+            # Query 5: Elevation vs Flood Risk
+            with c5:
+                st.markdown("#### 5. Topographic Vulnerability ⛰️")
+                st.markdown("*Low elevation equals high flood chance due to water pooling.*")
+                st.code('db.city_summaries.find({"elevation_m": {"$ne": null}}, {"_id": 0, "city": 1, "elevation_m": 1, "Flood_Risk_Score": 1})', language='javascript')
+                cursor_elev = col_cities.find({"elevation_m": {"$ne": None}}, {"_id": 0, "city": 1, "elevation_m": 1, "Flood_Risk_Score": 1})
+                df_elev = pd.DataFrame(list(cursor_elev))
+                if not df_elev.empty:
+                    fig14 = px.scatter(df_elev, x="elevation_m", y="Flood_Risk_Score", hover_name="city", color="Flood_Risk_Score", color_continuous_scale="Reds", template="plotly_dark")
+                    fig14.update_layout(xaxis_title="Elevation (meters)", yaxis_title="Flood Risk Score", plot_bgcolor="#0E1117", paper_bgcolor="#0E1117", margin={"r":0,"t":0,"l":0,"b":0})
+                    st.plotly_chart(fig14, use_container_width=True)
+                    
+            # Query 6: Population vs Flood Risk (Drainage failure)
+            with c6:
+                st.markdown("#### 6. Urban Density Risk (Drainage Impact) 🏙️")
+                st.markdown("*High population overwhelms drainage systems, increasing flood risk.*")
+                st.code('db.city_summaries.find({"Flood_Risk_Score": {"$gt": 0}}, {"_id": 0, "city": 1, "population": 1, "Flood_Risk_Score": 1})', language='javascript')
+                cursor_pop = col_cities.find({"Flood_Risk_Score": {"$gt": 0}}, {"_id": 0, "city": 1, "population": 1, "Flood_Risk_Score": 1})
+                df_pop = pd.DataFrame(list(cursor_pop))
+                if not df_pop.empty:
+                    fig15 = px.scatter(df_pop, x="population", y="Flood_Risk_Score", hover_name="city", size="population", color="Flood_Risk_Score", color_continuous_scale="Inferno", template="plotly_dark")
+                    fig15.update_layout(xaxis_title="Current Population", yaxis_title="Flood Risk Score", plot_bgcolor="#0E1117", paper_bgcolor="#0E1117", margin={"r":0,"t":0,"l":0,"b":0})
+                    st.plotly_chart(fig15, use_container_width=True)
+
         except Exception as e:
             st.error(f"MongoDB Error: {e}")
     else:
