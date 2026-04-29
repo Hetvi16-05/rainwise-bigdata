@@ -16,14 +16,14 @@ MODEL_SAVE_PATH = "DLmodels/tab_transformer_rainfall.pth"
 SCALER_SAVE_PATH = "DLmodels/tab_transformer_scaler.pkl"
 
 # HYPERPARAMETERS
-BATCH_SIZE = 128
-EPOCHS = 100 # Increased as we have early stopping now
-LEARNING_RATE = 0.0005
+BATCH_SIZE = 2048 # Massively increased to process 150k rows instantly on MPS
+EPOCHS = 25 # Capped for fast Viva retraining
+LEARNING_RATE = 0.001 # Increased slightly for faster convergence
 EMBED_DIM = 32
 TRANSFORMER_DEPTH = 3
 ATTENTION_HEADS = 4
 DROPOUT = 0.2
-EARLY_STOPPING_PATIENCE = 10 # Stop if no improvement for 10 epochs
+EARLY_STOPPING_PATIENCE = 5 # Stop quickly to save time
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
 def train_transformer():

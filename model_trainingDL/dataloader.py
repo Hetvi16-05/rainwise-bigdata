@@ -26,6 +26,17 @@ def prepare_data(file_path, task_type="classification", batch_size=64, test_size
     df = pd.read_csv(file_path, low_memory=False)
     df.columns = df.columns.str.lower()
     
+    # --- VIVA DEMO SPEEDUP ---
+    # Downsample the massive 2.2 million row dataset to 150,000 rows
+    # so the model retrains instantly during the presentation!
+    if len(df) > 150000:
+        df = df.sample(n=150000, random_state=42)
+    
+    # Add temporal awareness for Seasonal DL forecasting (Month of the year)
+    if "date" in df.columns:
+        # Extracts MM from YYYYMMDD integer format
+        df["month"] = (df["date"] % 10000) // 100
+    
     # Selecting the same features as the ML model for a fair baseline
     features = [
         "elevation_m",
@@ -35,6 +46,10 @@ def prepare_data(file_path, task_type="classification", batch_size=64, test_size
         "population_2026"
     ]
     
+    # Only append month if it was successfully extracted
+    if "month" in df.columns:
+        features.append("month")
+        
     if task_type == "classification":
         # Additional features for flood classification
         features += ["rain_mm", "rain3_mm"]

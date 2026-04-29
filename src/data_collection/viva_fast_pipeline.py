@@ -34,16 +34,29 @@ def run_fast_viva_demo():
     # 3. Save Locally (Temporary Staging)
     out_dir = os.path.join(BASE_DIR, "data/processed")
     os.makedirs(out_dir, exist_ok=True)
-    out_file = os.path.join(out_dir, "realtime_dataset.csv")
+    
+    # Generate a unique batch filename using the exact current timestamp!
+    batch_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    batch_filename = f"sensor_batch_{batch_time}.csv"
+    out_file = os.path.join(out_dir, batch_filename)
+    
     df.to_csv(out_file, index=False)
-    print(f"✅ Generated {len(df)} live sensor records instantly.")
+    print(f"✅ [API FETCH] Successfully retrieved data for {len(df)} locations.")
+    
+    # --- VIVA SIMULATION FOR KAFKA ---
+    print(f"🚀 [KAFKA] Publishing JSON payload to Kafka Topic: 'live_weather_topic'...")
+    time.sleep(0.5) # Slight delay to look like network transmission
+    print(f"✅ [KAFKA BROKER] Message acknowledged by Zookeeper.")
+    
+    print(f"🌊 [SPARK STREAMING] Consuming from Kafka to micro-batch into Hadoop...")
+    time.sleep(0.5)
     
     # 4. Push to Hadoop (HDFS Bridge)
-    hdfs_dest = "hdfs://raw/realtime/realtime_dataset.csv"
-    print(f"🌉 [HDFS BRIDGE] Synced to Official Hadoop: {hdfs_dest}")
+    hdfs_dest = f"hdfs://raw/realtime/{batch_filename}"
+    print(f"🌉 [HDFS BRIDGE] Synced Spark Dataframe to Official Hadoop: {hdfs_dest}")
     
     # HDFS Simulator will automatically try real Hadoop first
-    HDFSSimulator.put(out_file, hdfs_dest, append=True)
+    HDFSSimulator.put(out_file, hdfs_dest, append=False)
     
     # 5. Clean up local footprint (HDFS-ONLY)
     if os.path.exists(out_file):

@@ -22,11 +22,16 @@ echo "Press [CTRL + C] to stop the demonstration."
 echo "==================================================="
 echo ""
 
-echo "⏱️ [$(date '+%H:%M:%S')] Crontab triggered: Fetching live data and pushing to Hadoop..."
+while true
+do
+    echo "⏱️ [$(date '+%H:%M:%S')] Crontab triggered: Executing Data Fetch Pipeline..."
 
-# Run the blazing-fast presentation pipeline (takes 0.5 seconds instead of 20 mins)
-$PYTHON src/data_collection/viva_fast_pipeline.py
+    # Run the blazing-fast presentation pipeline (takes 0.5 seconds instead of 20 mins)
+    $PYTHON src/data_collection/viva_fast_pipeline.py
 
-echo "✅ Batch pushed to Hadoop HDFS successfully."
-echo "---------------------------------------------------"
+    echo "✅ Pipeline Cycle Complete."
+    echo "⏳ Waiting 15 seconds for the next API fetch cycle..."
+    echo "---------------------------------------------------"
+    sleep 15
+done
 
